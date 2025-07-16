@@ -31,12 +31,19 @@ A professional-grade trading bot built with Python, featuring real-time market d
 ```
 trading/
 ├── main.py                      # Main CLI application
-├── setup.sh / setup.bat         # Setup scripts for different platforms
-├── start.sh / start.bat         # Start scripts for different platforms
-├── format.sh / format.bat       # Code formatting scripts
+├── setup.sh                     # Setup script (Linux/macOS)
+├── start.sh                     # Start script (Linux/macOS)
+├── format.sh                    # Format script (Linux/macOS)
 ├── requirements.txt             # Production dependencies
 ├── requirements-dev.txt         # Development dependencies
 ├── config.env.template         # Configuration template
+├── docs/                        # Documentation and resources
+│   ├── trading.pdf             # Trading documentation
+│   └── alpaca.pdf              # Alpaca API documentation
+├── windows/                     # Windows-specific files
+│   ├── setup.bat               # Setup script (Windows)
+│   ├── start.bat               # Start script (Windows)
+│   └── format.bat              # Format script (Windows)
 ├── trading_bot/                 # Core trading bot package
 │   ├── core/                   # Core components (bot, config, models)
 │   ├── market_data/            # Market data management
@@ -63,7 +70,7 @@ cd trading
 ```cmd
 git clone <repository-url>
 cd trading
-setup.bat
+windows\setup.bat
 ```
 
 ### Manual Installation
@@ -118,16 +125,16 @@ cp config.env.template .env
 **Windows:**
 ```cmd
 # Run configuration check
-start.bat config
+windows\start.bat config
 
 # Run tests
-start.bat test
+windows\start.bat test
 
 # Run backtest
-start.bat backtest --strategy momentum_crossover --symbol AAPL --days 30
+windows\start.bat backtest --strategy momentum_crossover --symbol AAPL --days 30
 
 # Run live trading (paper trading)
-start.bat run
+windows\start.bat run
 ```
 
 ### Method 2: Direct Python Execution
@@ -254,7 +261,7 @@ python -m pytest tests/ -v --cov=trading_bot --cov-report=html
 ./format.sh
 
 # Windows
-format.bat
+windows\format.bat
 ```
 
 ### Manual Formatting
