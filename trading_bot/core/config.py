@@ -5,7 +5,7 @@ import os
 from typing import Any, Dict
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Load environment variables
 load_dotenv()
@@ -13,6 +13,8 @@ load_dotenv()
 
 class ExchangeConfig(BaseModel):
     """Exchange configuration."""
+
+    model_config = ConfigDict()
 
     name: str = Field(default="alpaca")
     api_key: str = Field(default="")
@@ -24,14 +26,22 @@ class ExchangeConfig(BaseModel):
 class TradingConfig(BaseModel):
     """Trading configuration."""
 
+    model_config = ConfigDict()
+
     portfolio_value: float = Field(default=100000.0, gt=0)
     max_position_size: float = Field(default=0.05, gt=0, le=1.0)
     stop_loss_percentage: float = Field(default=0.02, gt=0, le=1.0)
     take_profit_percentage: float = Field(default=0.04, gt=0, le=1.0)
+    trading_symbols: str = Field(
+        default="AAPL,GOOGL,MSFT",
+        description="Comma-separated list of symbols to trade",
+    )
 
 
 class RiskConfig(BaseModel):
     """Risk management configuration."""
+
+    model_config = ConfigDict()
 
     max_daily_loss: float = Field(default=0.02, gt=0, le=1.0)
     max_open_positions: int = Field(default=10, gt=0)
@@ -41,11 +51,15 @@ class RiskConfig(BaseModel):
 class DatabaseConfig(BaseModel):
     """Database configuration."""
 
+    model_config = ConfigDict()
+
     url: str = Field(default="sqlite+aiosqlite:///trading_bot.db")
 
 
 class LoggingConfig(BaseModel):
     """Logging configuration."""
+
+    model_config = ConfigDict()
 
     level: str = Field(default="INFO")
     format: str = Field(default="json")
@@ -54,6 +68,8 @@ class LoggingConfig(BaseModel):
 class MonitoringConfig(BaseModel):
     """Monitoring configuration."""
 
+    model_config = ConfigDict()
+
     enable_prometheus: bool = Field(default=False)
     prometheus_port: int = Field(default=8000, gt=0, le=65535)
 
@@ -61,10 +77,13 @@ class MonitoringConfig(BaseModel):
 class StrategyConfig(BaseModel):
     """Strategy configuration."""
 
+    model_config = ConfigDict()
+
     default_strategy: str = Field(default="momentum_crossover")
     parameters: Dict[str, Any] = Field(default_factory=dict)
 
-    @validator("parameters", pre=True)
+    @field_validator("parameters", mode="before")
+    @classmethod
     def parse_parameters(cls, v: Any) -> Dict[str, Any]:
         if isinstance(v, str):
             try:
@@ -78,6 +97,8 @@ class StrategyConfig(BaseModel):
 class MarketDataConfig(BaseModel):
     """Market data configuration."""
 
+    model_config = ConfigDict()
+
     provider: str = Field(default="alpaca")
     websocket_reconnect_delay: int = Field(default=5, gt=0)
     max_reconnect_attempts: int = Field(default=10, gt=0)
@@ -90,6 +111,8 @@ class MarketDataConfig(BaseModel):
 
 class Config(BaseModel):
     """Main configuration class."""
+
+    model_config = ConfigDict()
 
     exchange: ExchangeConfig = Field(default_factory=ExchangeConfig)
     trading: TradingConfig = Field(default_factory=TradingConfig)
@@ -117,6 +140,7 @@ class Config(BaseModel):
             max_position_size=float(os.getenv("MAX_POSITION_SIZE", 0.05)),
             stop_loss_percentage=float(os.getenv("STOP_LOSS_PERCENTAGE", 0.02)),
             take_profit_percentage=float(os.getenv("TAKE_PROFIT_PERCENTAGE", 0.04)),
+            trading_symbols=os.getenv("TRADING_SYMBOLS", "AAPL,GOOGL,MSFT"),
         )
 
         risk_config = RiskConfig(

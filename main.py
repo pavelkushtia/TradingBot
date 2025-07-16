@@ -1,3 +1,4 @@
+print("main.py: START")
 #!/usr/bin/env python3
 """
 High-Performance Trading Bot
@@ -89,7 +90,7 @@ class TradingBotCLI:
 
         return instances
 
-    async def run_bot(self):
+    async def run_bot(self, symbols: str):
         """Run the trading bot."""
         try:
             # Check for existing instances
@@ -113,6 +114,10 @@ class TradingBotCLI:
                     return
 
             self.config = Config.from_env()
+            # Override trading symbols with CLI argument
+            if symbols:
+                self.config.trading.trading_symbols = symbols
+
             self.bot = TradingBot(self.config)
 
             console.print(
@@ -122,7 +127,8 @@ class TradingBotCLI:
                     f"Exchange: {self.config.exchange.name}\n"
                     f"Strategy: {self.config.strategy.default_strategy}\n"
                     f"Portfolio Value: "
-                    f"${self.config.trading.portfolio_value:,.2f}",
+                    f"${self.config.trading.portfolio_value:,.2f}\n"
+                    f"Trading Symbols: {self.config.trading.trading_symbols}",
                     title="🚀 Trading Bot",
                 )
             )
@@ -348,10 +354,15 @@ def cli():
 
 
 @cli.command()
-def run():
+@click.option(
+    "--symbols",
+    default=None,
+    help="Comma-separated list of symbols to trade (e.g., AAPL,GOOGL,MSFT)",
+)
+def run(symbols):
     """Run the trading bot in live mode."""
     bot_cli = TradingBotCLI()
-    asyncio.run(bot_cli.run_bot())
+    asyncio.run(bot_cli.run_bot(symbols))
 
 
 @cli.command()

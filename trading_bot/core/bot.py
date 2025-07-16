@@ -93,6 +93,23 @@ class TradingBot:
         await self.strategy_manager.initialize()
         await self.risk_manager.initialize()
 
+        # Initialize strategies with configured symbols
+        await self._initialize_strategy_symbols()
+
+    async def _initialize_strategy_symbols(self) -> None:
+        """Initialize strategies with configured symbols."""
+        configured_symbols = self.config.trading.trading_symbols.split(",")
+        configured_symbols = [s.strip() for s in configured_symbols if s.strip()]
+
+        # Add configured symbols to all strategies
+        for strategy in self.strategy_manager.strategies.values():
+            for symbol in configured_symbols:
+                strategy.symbols.add(symbol)
+
+        self.logger.logger.info(
+            f"Initialized strategies with symbols: {configured_symbols}"
+        )
+
     async def _shutdown_managers(self) -> None:
         """Shutdown all manager components."""
         await self.strategy_manager.shutdown()
@@ -161,13 +178,19 @@ class TradingBot:
 
     async def _process_market_data(self) -> None:
         """Process incoming market data updates."""
-        # Get latest market data for all tracked symbols
-        symbols = list(self.positions.keys()) + [
-            order.symbol for order in self.active_orders.values()
-        ]
+        # Get symbols from configuration and current positions/orders
+        configured_symbols = self.config.trading.trading_symbols.split(",")
+        configured_symbols = [s.strip() for s in configured_symbols if s.strip()]
+
+        # Combine configured symbols with current positions and orders
+        symbols = set(
+            configured_symbols
+            + list(self.positions.keys())
+            + [order.symbol for order in self.active_orders.values()]
+        )
 
         if symbols:
-            await self.market_data_manager.subscribe_symbols(symbols)
+            await self.market_data_manager.subscribe_symbols(list(symbols))
 
     async def _generate_signals(self) -> List[StrategySignal]:
         """Generate trading signals from all active strategies."""
