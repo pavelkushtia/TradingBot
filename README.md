@@ -2,6 +2,11 @@
 
 A professional-grade trading bot built with Python, featuring real-time market data processing, multiple trading strategies, comprehensive risk management, and advanced backtesting capabilities.
 
+## 📚 Documentation
+
+- **[📖 Architecture Documentation](ARCHITECTURE.md)** - Comprehensive technical overview for developers
+- **[📋 API Documentation](docs/)** - Trading and Alpaca API references
+
 ## 🚀 Features
 
 ### Core Features
