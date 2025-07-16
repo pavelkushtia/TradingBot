@@ -15,7 +15,8 @@ import asyncio
 import signal
 import subprocess
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
 from typing import Optional
 
@@ -121,7 +122,7 @@ class TradingBotCLI:
 
         if status["start_time"]:
             start_time = datetime.fromisoformat(status["start_time"])
-            runtime = datetime.utcnow() - start_time
+            runtime = datetime.now(timezone.utc) - start_time
             table.add_row("Runtime", str(runtime).split(".")[0])
 
         console.print(table)
@@ -156,8 +157,8 @@ class TradingBotCLI:
             # Run backtest
             backtest_engine = BacktestEngine(self.config)
 
-            start_date = datetime.utcnow() - timedelta(days=days)
-            end_date = datetime.utcnow()
+            start_date = datetime.now(timezone.utc) - timedelta(days=days)
+            end_date = datetime.now(timezone.utc)
 
             with Progress() as progress:
                 task = progress.add_task("Running backtest...", total=100)
@@ -178,26 +179,51 @@ class TradingBotCLI:
             console.print(f"[red]Backtest Error: {e}[/red]")
 
     def generate_sample_data(self, symbol: str, days: int) -> list:
-        """Generate sample market data for backtesting."""
+        """Generate sample market data that creates clear crossover signals."""
         import random
 
+        # Set seed for consistent results
+        random.seed(42)
+
         data = []
-        base_time = datetime.utcnow() - timedelta(days=days)
-        base_price = 100.0
+        base_time = datetime.now(timezone.utc) - timedelta(days=days)
 
-        for i in range(days * 24):  # Hourly data
-            # Random walk with slight upward bias
-            price_change = random.uniform(-0.5, 0.6)
-            base_price += price_change
-            base_price = max(base_price, 50)  # Minimum price
+        total_bars = days * 24
+        prices = []
 
+        # Create multiple phases to generate several crossovers
+        # Phase 1: Declining trend (first 1/3)
+        phase1_bars = total_bars // 3
+        for i in range(phase1_bars):
+            price = 200 - i * 1.2  # Decline
+            price += random.uniform(-2, 2)  # Noise
+            prices.append(max(price, 50))
+
+        # Phase 2: Rising trend (middle 1/3) - creates bullish crossover
+        phase2_bars = total_bars // 3
+        start_price = prices[-1] if prices else 100
+        for i in range(phase2_bars):
+            price = start_price + i * 1.5  # Rise
+            price += random.uniform(-2, 2)  # Noise
+            prices.append(price)
+
+        # Phase 3: Declining trend (final 1/3) - creates bearish crossover
+        remaining_bars = total_bars - len(prices)
+        start_price = prices[-1] if prices else 200
+        for i in range(remaining_bars):
+            price = start_price - i * 0.8  # Decline
+            price += random.uniform(-2, 2)  # Noise
+            prices.append(max(price, 50))
+
+        # Create MarketData objects
+        for i, price in enumerate(prices):
             bar = MarketData(
                 symbol=symbol,
                 timestamp=base_time + timedelta(hours=i),
-                open=round(base_price, 2),
-                high=round(base_price + random.uniform(0, 2), 2),
-                low=round(base_price - random.uniform(0, 2), 2),
-                close=round(base_price, 2),
+                open=Decimal(str(round(price, 2))),
+                high=Decimal(str(round(price + random.uniform(0, 1), 2))),
+                low=Decimal(str(round(price - random.uniform(0, 1), 2))),
+                close=Decimal(str(round(price, 2))),
                 volume=random.randint(50000, 500000),
             )
             data.append(bar)
@@ -242,8 +268,16 @@ class TradingBotCLI:
             trades_table.add_column("Price", style="red")
 
             for trade in results["trades"][-5:]:
+                # Handle datetime object from trade timestamp
+                timestamp_str = trade["timestamp"]
+                if isinstance(timestamp_str, str):
+                    display_time = timestamp_str[:19]
+                else:
+                    # Convert datetime to string format
+                    display_time = timestamp_str.strftime("%Y-%m-%d %H:%M:%S")
+
                 trades_table.add_row(
-                    trade["timestamp"][:19],
+                    display_time,
                     trade["symbol"],
                     trade["side"],
                     str(trade["quantity"]),

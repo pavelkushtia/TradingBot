@@ -1,7 +1,7 @@
 """Database management for storing trading data and history."""
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -267,7 +267,7 @@ class DatabaseManager:
                         metrics.winning_trades,
                         metrics.losing_trades,
                         float(metrics.profit_factor),
-                        datetime.utcnow().isoformat(),
+                        datetime.now(timezone.utc).isoformat(),
                     ),
                 )
                 await db.commit()

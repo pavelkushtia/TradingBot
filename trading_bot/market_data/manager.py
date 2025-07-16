@@ -2,7 +2,7 @@
 
 import asyncio
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Callable, Dict, List, Optional, Set
 
@@ -124,7 +124,7 @@ class MarketDataManager:
 
         # Default to last 1000 minutes if no start/end provided
         if not end:
-            end = datetime.utcnow()
+            end = datetime.now(timezone.utc)
         if not start:
             start = end - timedelta(minutes=limit)
 
@@ -237,7 +237,7 @@ class MarketDataManager:
                 await self._process_data_item(data)
 
             self.message_count += 1
-            self.last_message_time = datetime.utcnow()
+            self.last_message_time = datetime.now(timezone.utc)
 
         except Exception as e:
             self.logger.log_error(

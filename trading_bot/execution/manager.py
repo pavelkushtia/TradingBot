@@ -2,7 +2,7 @@
 
 import asyncio
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -62,7 +62,7 @@ class ExecutionManager:
                 order.id = str(uuid.uuid4())
 
             # Set timestamps
-            order.created_at = datetime.utcnow()
+            order.created_at = datetime.now(timezone.utc)
             order.updated_at = order.created_at
 
             # Validate order
@@ -111,7 +111,7 @@ class ExecutionManager:
 
             # Update order status
             order.status = OrderStatus.CANCELED
-            order.updated_at = datetime.utcnow()
+            order.updated_at = datetime.now(timezone.utc)
 
             # Move to completed orders
             self.completed_orders[order_id] = order
@@ -283,7 +283,7 @@ class ExecutionManager:
                 side=order.side,
                 quantity=order.quantity,
                 price=fill_price,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 commission=self._calculate_commission(order.quantity, fill_price),
                 strategy_id=order.strategy_id,
             )
@@ -292,7 +292,7 @@ class ExecutionManager:
             order.status = OrderStatus.FILLED
             order.filled_quantity = order.quantity
             order.average_fill_price = fill_price
-            order.updated_at = datetime.utcnow()
+            order.updated_at = datetime.now(timezone.utc)
 
             # Move to completed orders
             self.completed_orders[order.id] = order
@@ -311,7 +311,7 @@ class ExecutionManager:
     async def _mock_reject_order(self, order: Order, reason: str) -> None:
         """Mock order rejection."""
         order.status = OrderStatus.REJECTED
-        order.updated_at = datetime.utcnow()
+        order.updated_at = datetime.now(timezone.utc)
         order.metadata["rejection_reason"] = reason
 
         # Move to completed orders

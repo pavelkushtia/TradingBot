@@ -1,7 +1,7 @@
 """Base strategy class for all trading strategies."""
 
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Set
 
@@ -179,7 +179,7 @@ class BaseStrategy(ABC):
             strength=strength,
             price=price,
             quantity=quantity,
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             strategy_name=self.name,
             metadata=metadata or {},
         )

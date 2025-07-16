@@ -1,10 +1,9 @@
 """Backtesting engine for strategy validation and performance analysis."""
 
+import math
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
-
-import numpy as np
 
 from ..core.config import Config
 from ..core.exceptions import BacktestError
@@ -370,11 +369,11 @@ class BacktestEngine:
                         else:
                             position_cost = Decimal("0")
 
-        # Calculate metrics
-        total_trades = winning_trades + losing_trades
+        # Calculate metrics for closed trades only
+        # total_trades will be set to len(self.trades) below to count ALL trades
         win_rate = (
-            Decimal(str(winning_trades / total_trades))
-            if total_trades > 0
+            Decimal(str(winning_trades / (winning_trades + losing_trades)))
+            if (winning_trades + losing_trades) > 0
             else Decimal("0")
         )
 
@@ -402,7 +401,7 @@ class BacktestEngine:
             max_drawdown=max_drawdown,
             win_rate=win_rate,
             profit_factor=profit_factor,
-            total_trades=total_trades,
+            total_trades=len(self.trades),  # BUGFIX: Count all executed trades
             winning_trades=winning_trades,
             losing_trades=losing_trades,
             average_win=average_win,
@@ -430,8 +429,9 @@ class BacktestEngine:
             return Decimal("0")
 
         # Calculate Sharpe ratio
-        mean_return = np.mean(returns)
-        std_return = np.std(returns)
+        mean_return = sum(returns) / len(returns)
+        variance = sum((r - mean_return) ** 2 for r in returns) / len(returns)
+        std_return = math.sqrt(variance)
 
         if std_return == 0:
             return Decimal("0")
@@ -440,7 +440,7 @@ class BacktestEngine:
         risk_free_rate = (
             float(self.config.risk.risk_free_rate) / 252
         )  # Daily risk-free rate
-        sharpe = (mean_return - risk_free_rate) / std_return * np.sqrt(252)
+        sharpe = (mean_return - risk_free_rate) / std_return * math.sqrt(252)
 
         return Decimal(str(round(sharpe, 4)))
 

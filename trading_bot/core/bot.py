@@ -1,7 +1,7 @@
 """Main trading bot implementation."""
 
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -49,7 +49,7 @@ class TradingBot:
         """Start the trading bot."""
         try:
             self.logger.logger.info("Starting trading bot...")
-            self.start_time = datetime.utcnow()
+            self.start_time = datetime.now(timezone.utc)
             self.running = True
 
             # Initialize all managers
@@ -271,7 +271,7 @@ class TradingBot:
             self.portfolio.cash + self.portfolio.total_market_value
         )
         self.portfolio.total_pnl = self.portfolio.total_unrealized_pnl
-        self.portfolio.updated_at = datetime.utcnow()
+        self.portfolio.updated_at = datetime.now(timezone.utc)
 
     async def _check_risk_limits(self) -> None:
         """Check if any risk limits are breached."""

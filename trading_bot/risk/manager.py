@@ -1,6 +1,6 @@
 """Risk management manager for position sizing and risk controls."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, Optional
 
@@ -27,7 +27,7 @@ class RiskManager:
         # Daily tracking
         self.daily_pnl = Decimal("0")
         self.daily_trades = 0
-        self.last_reset_date = datetime.utcnow().date()
+        self.last_reset_date = datetime.now(timezone.utc).date()
 
         # Position tracking
         self.position_sizes: Dict[str, Decimal] = {}
@@ -226,7 +226,7 @@ class RiskManager:
 
     async def _check_daily_reset(self) -> None:
         """Reset daily counters if new trading day."""
-        current_date = datetime.utcnow().date()
+        current_date = datetime.now(timezone.utc).date()
         if current_date > self.last_reset_date:
             self.daily_pnl = Decimal("0")
             self.daily_trades = 0

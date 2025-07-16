@@ -1,6 +1,6 @@
 """Strategy management and execution coordination."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Type
 
 from ..core.config import Config
@@ -111,7 +111,7 @@ class StrategyManager:
 
                 self.signal_count += len(signals)
                 if signals:
-                    self.last_signal_time = datetime.utcnow()
+                    self.last_signal_time = datetime.now(timezone.utc)
 
             except Exception as e:
                 self.logger.log_error(
