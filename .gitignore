@@ -201,6 +201,7 @@ Thumbs.db
 *.temp
 temp/
 tmp/
+nohup.out
 
 # Virtual environments
 venv/
