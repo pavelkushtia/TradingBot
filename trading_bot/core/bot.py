@@ -14,6 +14,7 @@ from .config import Config
 from .exceptions import RiskManagementError, TradingBotError
 from .logging import TradingLogger, setup_logging
 from .models import Order, Portfolio, Position, StrategySignal
+from .shared_execution import SharedExecutionLogic
 
 
 class TradingBot:
@@ -35,6 +36,9 @@ class TradingBot:
         self.risk_manager = RiskManager(config)
         self.execution_manager = ExecutionManager(config)
         self.database_manager = DatabaseManager(config)
+
+        # Initialize shared execution logic (same as backtesting)
+        self.shared_execution = SharedExecutionLogic()
 
         # State
         self.portfolio: Optional[Portfolio] = None
@@ -73,9 +77,8 @@ class TradingBot:
         # Cancel all active orders
         await self._cancel_all_orders()
 
-        # Close all positions if configured
-        if self.config.trading.close_positions_on_stop:
-            await self._close_all_positions()
+        # Close all positions if configured (optional)
+        # await self._close_all_positions()
 
         # Shutdown managers
         await self._shutdown_managers()
@@ -225,31 +228,14 @@ class TradingBot:
                 )
 
     async def _signal_to_order(self, signal: StrategySignal) -> Optional[Order]:
-        """Convert a strategy signal to an order."""
-        # This is a simplified implementation
-        # In practice, you'd have more sophisticated order sizing logic
-
-        if signal.signal_type == "hold":
-            return None
-
+        """Convert a strategy signal to an order (shared logic with backtesting)."""
         # Calculate position size based on risk management
         position_size = await self.risk_manager.calculate_position_size(
             signal.symbol, signal.price or Decimal("0"), self.portfolio
         )
 
-        if position_size <= 0:
-            return None
-
-        from .models import OrderSide, OrderType
-
-        return Order(
-            symbol=signal.symbol,
-            side=OrderSide.BUY if signal.signal_type == "buy" else OrderSide.SELL,
-            type=OrderType.MARKET,
-            quantity=position_size,
-            strategy_id=signal.strategy_name,
-            metadata=signal.metadata,
-        )
+        # Use shared execution logic (same as backtesting)
+        return self.shared_execution.signal_to_order(signal, position_size)
 
     async def _update_portfolio(self) -> None:
         """Update portfolio with latest market data and positions."""

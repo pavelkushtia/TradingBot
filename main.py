@@ -144,14 +144,14 @@ class TradingBotCLI:
                 return
 
             strategy_class = strategy_classes[strategy_name]
-            
+
             # Use custom parameters for backtesting with lower thresholds
             backtest_parameters = {
                 "short_window": 10,
                 "long_window": 30,
                 "min_strength_threshold": 0.0001,  # Lower threshold for backtesting
             }
-            
+
             strategy = strategy_class(strategy_name, backtest_parameters)
 
             console.print(

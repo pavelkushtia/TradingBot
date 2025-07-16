@@ -8,18 +8,10 @@ from typing import Any, Dict, List, Optional, Tuple
 from ..core.config import Config
 from ..core.exceptions import BacktestError
 from ..core.logging import TradingLogger
-from ..core.models import (
-    MarketData,
-    Order,
-    OrderSide,
-    OrderStatus,
-    OrderType,
-    PerformanceMetrics,
-    Portfolio,
-    Position,
-    PositionSide,
-    Trade,
-)
+from ..core.models import (MarketData, Order, OrderSide, OrderStatus,
+                           OrderType, PerformanceMetrics, Portfolio, Position,
+                           PositionSide, Trade)
+from ..core.shared_execution import SharedExecutionLogic
 from ..risk.manager import RiskManager
 from ..strategy.base import BaseStrategy
 
@@ -35,10 +27,13 @@ class BacktestEngine:
         # Initialize risk manager (same as real trading)
         self.risk_manager = RiskManager(config)
 
+        # Initialize shared execution logic (same as real trading)
+        self.shared_execution = SharedExecutionLogic(
+            commission_per_share=Decimal("0.005"), min_commission=Decimal("1.00")
+        )
+
         # Backtest parameters
         self.initial_capital = Decimal(str(config.trading.portfolio_value))
-        self.commission_per_share = Decimal("0.005")
-        self.min_commission = Decimal("1.00")
 
         # State tracking
         self.portfolio: Optional[Portfolio] = None
@@ -77,15 +72,18 @@ class BacktestEngine:
                     # If timezone-naive, assume it's UTC
                     return dt.replace(tzinfo=timezone.utc)
                 return dt
-            
+
             # Normalize all timestamps
             normalized_start = normalize_datetime(start_date)
             normalized_end = normalize_datetime(end_date)
-            
+
             # Filter data by date range
             filtered_data = [
-                bar for bar in market_data 
-                if normalized_start <= normalize_datetime(bar.timestamp) <= normalized_end
+                bar
+                for bar in market_data
+                if normalized_start
+                <= normalize_datetime(bar.timestamp)
+                <= normalized_end
             ]
 
             if not filtered_data:
@@ -175,8 +173,13 @@ class BacktestEngine:
             if position_size <= 0:
                 return
 
+            # Create order using shared logic (same as real trading)
+            order = self.shared_execution.signal_to_order(signal, position_size)
+            if not order:
+                return
+
             # Simulate realistic execution with slippage (same as real trading)
-            fill_price = self._simulate_execution_price(
+            fill_price = self.shared_execution.simulate_execution_price(
                 bar.close, signal.signal_type, position_size
             )
 
@@ -245,8 +248,7 @@ class BacktestEngine:
 
     def _calculate_commission(self, quantity: Decimal, price: Decimal) -> Decimal:
         """Calculate commission for a trade."""
-        commission = max(quantity * self.commission_per_share, self.min_commission)
-        return commission
+        return self.shared_execution.calculate_commission(quantity, price)
 
     def _simulate_execution_price(
         self, market_price: Decimal, signal_type: str, quantity: Decimal

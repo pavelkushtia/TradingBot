@@ -10,6 +10,7 @@ from ..core.config import Config
 from ..core.exceptions import OrderExecutionError
 from ..core.logging import TradingLogger
 from ..core.models import Order, OrderSide, OrderStatus, OrderType, Trade
+from ..core.shared_execution import SharedExecutionLogic
 
 
 class ExecutionManager:
@@ -19,6 +20,9 @@ class ExecutionManager:
         """Initialize execution manager."""
         self.config = config
         self.logger = TradingLogger("execution_manager")
+
+        # Initialize shared execution logic (same as backtesting)
+        self.shared_execution = SharedExecutionLogic()
 
         # Order tracking
         self.pending_orders: Dict[str, Order] = {}
@@ -269,24 +273,14 @@ class ExecutionManager:
 
             # Add some slippage for market orders
             if order.type == OrderType.MARKET:
-                slippage_factor = 0.001  # 0.1% slippage
+                slippage_factor = Decimal("0.001")  # 0.1% slippage
                 if order.side == OrderSide.BUY:
                     fill_price *= 1 + slippage_factor
                 else:
                     fill_price *= 1 - slippage_factor
 
             # Create trade
-            trade = Trade(
-                id=str(uuid.uuid4()),
-                order_id=order.id,
-                symbol=order.symbol,
-                side=order.side,
-                quantity=order.quantity,
-                price=fill_price,
-                timestamp=datetime.now(timezone.utc),
-                commission=self._calculate_commission(order.quantity, fill_price),
-                strategy_id=order.strategy_id,
-            )
+            trade = self.shared_execution.create_trade_from_order(order, fill_price)
 
             # Update order
             order.status = OrderStatus.FILLED
@@ -295,8 +289,9 @@ class ExecutionManager:
             order.updated_at = datetime.now(timezone.utc)
 
             # Move to completed orders
-            self.completed_orders[order.id] = order
-            del self.pending_orders[order.id]
+            if order.id:
+                self.completed_orders[order.id] = order
+                del self.pending_orders[order.id]
 
             # Update statistics
             self.orders_filled += 1
@@ -315,8 +310,9 @@ class ExecutionManager:
         order.metadata["rejection_reason"] = reason
 
         # Move to completed orders
-        self.completed_orders[order.id] = order
-        del self.pending_orders[order.id]
+        if order.id:
+            self.completed_orders[order.id] = order
+            del self.pending_orders[order.id]
 
         self.logger.log_order(order.dict(), "rejected")
 
@@ -346,10 +342,8 @@ class ExecutionManager:
         return Decimal(str(round(mock_price, 2)))
 
     def _calculate_commission(self, quantity: Decimal, price: Decimal) -> Decimal:
-        """Calculate commission for a trade."""
-        # Simple commission structure: $0.005 per share, $1 minimum
-        commission = max(quantity * Decimal("0.005"), Decimal("1.00"))
-        return commission
+        """Calculate commission for a trade (using shared execution logic)."""
+        return self.shared_execution.calculate_commission(quantity, price)
 
     def get_stats(self) -> Dict[str, Any]:
         """Get execution statistics."""
