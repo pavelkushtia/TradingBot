@@ -1,7 +1,7 @@
 """Backtesting engine for strategy validation and performance analysis."""
 
 import math
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -70,9 +70,22 @@ class BacktestEngine:
             # Sort market data by timestamp
             market_data.sort(key=lambda x: x.timestamp)
 
+            # Normalize timezone for comparison
+            def normalize_datetime(dt):
+                """Normalize datetime to UTC timezone for comparison."""
+                if dt.tzinfo is None:
+                    # If timezone-naive, assume it's UTC
+                    return dt.replace(tzinfo=timezone.utc)
+                return dt
+            
+            # Normalize all timestamps
+            normalized_start = normalize_datetime(start_date)
+            normalized_end = normalize_datetime(end_date)
+            
             # Filter data by date range
             filtered_data = [
-                bar for bar in market_data if start_date <= bar.timestamp <= end_date
+                bar for bar in market_data 
+                if normalized_start <= normalize_datetime(bar.timestamp) <= normalized_end
             ]
 
             if not filtered_data:

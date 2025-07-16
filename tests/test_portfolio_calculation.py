@@ -31,7 +31,7 @@ def create_test_data_no_crossover(symbol: str, days: int = 15) -> list[MarketDat
             high=price + Decimal("0.5"),
             low=price - Decimal("0.5"),
             close=price,
-            volume=Decimal("1000"),
+            volume=1000,
             vwap=price,
         )
         data.append(bar)
@@ -68,6 +68,7 @@ def create_test_data_with_crossover(symbol: str, days: int = 15) -> list[MarketD
             high=price + Decimal("0.5"),
             low=price - Decimal("0.5"),
             close=price,
+            volume=1000,
             vwap=price,
         )
         data.append(bar)
