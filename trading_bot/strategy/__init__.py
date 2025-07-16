@@ -1,1 +1,1 @@
-"""Trading strategy components.""" 
+"""Trading strategy components."""

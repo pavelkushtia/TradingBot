@@ -1,1 +1,1 @@
-"""Backtesting engine components.""" 
+"""Backtesting engine components."""

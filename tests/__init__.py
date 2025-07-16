@@ -1,1 +1,1 @@
-"""Test package for trading bot.""" 
+"""Test package for trading bot."""

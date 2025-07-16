@@ -40,4 +40,4 @@ fi
 
 # Run the trading bot with provided arguments
 echo "🚀 Starting Trading Bot..."
-python main.py "$@" 
+python main.py "$@"

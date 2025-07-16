@@ -271,21 +271,21 @@ from ..core.models import StrategySignal
 
 class CustomStrategy(BaseStrategy):
     """Custom trading strategy example."""
-    
+
     def __init__(self, name: str, parameters: dict):
         super().__init__(name, parameters)
         self.threshold = parameters.get("threshold", 0.02)
-    
+
     async def generate_signals(self) -> List[StrategySignal]:
         """Generate custom signals."""
         signals = []
-        
+
         for symbol in self.symbols:
             # Get latest price
             current_price = self.get_latest_price(symbol)
             if not current_price:
                 continue
-            
+
             # Custom logic here
             if self._should_buy(symbol, current_price):
                 signal = self.create_signal(
@@ -295,7 +295,7 @@ class CustomStrategy(BaseStrategy):
                     metadata={"reason": "custom_buy_condition"}
                 )
                 signals.append(signal)
-            
+
             elif self._should_sell(symbol, current_price):
                 signal = self.create_signal(
                     symbol=symbol,
@@ -304,26 +304,26 @@ class CustomStrategy(BaseStrategy):
                     metadata={"reason": "custom_sell_condition"}
                 )
                 signals.append(signal)
-        
+
         return signals
-    
+
     def _should_buy(self, symbol: str, price: Decimal) -> bool:
         """Custom buy logic."""
         # Example: Buy if price increased by threshold
         bars = self.get_bars(symbol, 2)
         if len(bars) < 2:
             return False
-        
+
         price_change = (bars[-1].close - bars[-2].close) / bars[-2].close
         return price_change > self.threshold
-    
+
     def _should_sell(self, symbol: str, price: Decimal) -> bool:
         """Custom sell logic."""
         # Example: Sell if price decreased by threshold
         bars = self.get_bars(symbol, 2)
         if len(bars) < 2:
             return False
-        
+
         price_change = (bars[-1].close - bars[-2].close) / bars[-2].close
         return price_change < -self.threshold
 ```
@@ -337,7 +337,7 @@ from .custom_strategy import CustomStrategy
 class StrategyManager:
     def __init__(self, config: Config):
         # ... existing code ...
-        
+
         # Add custom strategy
         self.strategy_classes["custom"] = CustomStrategy
 ```
@@ -376,7 +376,7 @@ from trading_bot import TradingBot, Config
 async def monitor_bot():
     config = Config.from_env()
     bot = TradingBot(config)
-    
+
     # Get status periodically
     while True:
         status = bot.get_status()
@@ -394,13 +394,13 @@ from trading_bot.database.manager import DatabaseManager
 async def get_performance():
     db = DatabaseManager(config)
     await db.initialize()
-    
+
     # Get trades
     trades = await db.get_trades(limit=100)
-    
+
     # Get performance metrics
     metrics = await db.get_performance_metrics()
-    
+
     print(f"Total trades: {len(trades)}")
     print(f"Win rate: {metrics.win_rate:.2%}")
 ```
@@ -533,4 +533,4 @@ done
 
 ---
 
-This guide should help you effectively use the trading bot. Remember to always test thoroughly and understand the risks involved in automated trading. 
+This guide should help you effectively use the trading bot. Remember to always test thoroughly and understand the risks involved in automated trading.

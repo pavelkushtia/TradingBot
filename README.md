@@ -32,6 +32,7 @@ A professional-grade trading bot built with Python, featuring real-time market d
 trading/
 ├── setup.sh / setup.bat         # Setup scripts for different platforms
 ├── start.sh / start.bat         # Start scripts for different platforms
+├── format.sh / format.bat       # Code formatting scripts
 ├── requirements.txt             # Production dependencies
 ├── requirements-dev.txt         # Development dependencies
 ├── main.py                      # Main CLI application
@@ -171,6 +172,63 @@ start.bat --help
    ```bash
    ./start.sh live-trade
    ```
+
+## 🎨 Code Formatting
+
+### Automatic Code Formatting
+
+The project includes comprehensive code formatting tools that automatically fix common issues:
+
+#### Quick Format (Recommended)
+```bash
+# Linux/macOS
+./format.sh
+
+# Windows
+format.bat
+```
+
+#### What the formatter does:
+1. **Removes unused imports and variables** (autoflake)
+2. **Fixes line length violations** (autopep8) - 88 character limit
+3. **Applies consistent formatting** (black)
+4. **Sorts imports** (isort)
+5. **Checks for remaining issues** (flake8)
+
+#### Manual formatting steps:
+```bash
+# Activate virtual environment
+source venv/bin/activate  # Linux/macOS
+# or
+venv\Scripts\activate.bat  # Windows
+
+# Install formatting tools
+pip install black isort autoflake autopep8 flake8
+
+# Run individual tools
+autoflake --remove-all-unused-imports --remove-unused-variables --in-place --recursive .
+autopep8 --max-line-length=88 --aggressive --in-place --recursive .
+black --line-length 88 .
+isort . --profile black --line-length 88
+flake8 . --max-line-length=88
+```
+
+#### Pre-commit Hooks
+The project uses pre-commit hooks to automatically format code on commit:
+```bash
+# Install pre-commit hooks
+pre-commit install
+
+# Run manually on all files
+pre-commit run --all-files
+```
+
+#### Formatting Standards
+- **Line length**: 88 characters (Black standard)
+- **Import sorting**: isort with Black profile
+- **Code style**: Black formatter
+- **Linting**: flake8 with E203, W503, E501 ignored
+- **No unused imports or variables**
 
 ## 📊 Trading Strategies
 

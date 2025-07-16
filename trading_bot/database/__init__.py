@@ -1,1 +1,1 @@
-"""Database management components.""" 
+"""Database management components."""

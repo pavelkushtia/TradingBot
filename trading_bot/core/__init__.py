@@ -1,1 +1,1 @@
-"""Core trading bot components.""" 
+"""Core trading bot components."""

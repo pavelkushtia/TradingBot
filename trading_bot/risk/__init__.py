@@ -1,1 +1,1 @@
-"""Risk management components.""" 
+"""Risk management components."""

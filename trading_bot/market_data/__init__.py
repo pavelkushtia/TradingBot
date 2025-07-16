@@ -1,1 +1,1 @@
-"""Market data management components.""" 
+"""Market data management components."""

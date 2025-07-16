@@ -45,4 +45,4 @@ echo 1. Run: venv\Scripts\activate.bat
 echo 2. Run: python main.py --help
 echo.
 echo Or use the start script: start.bat
-pause 
+pause
