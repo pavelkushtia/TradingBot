@@ -20,6 +20,7 @@ from ..core.models import (
     PositionSide,
     Trade,
 )
+from ..risk.manager import RiskManager
 from ..strategy.base import BaseStrategy
 
 
@@ -30,6 +31,9 @@ class BacktestEngine:
         """Initialize backtesting engine."""
         self.config = config
         self.logger = TradingLogger("backtest_engine")
+
+        # Initialize risk manager (same as real trading)
+        self.risk_manager = RiskManager(config)
 
         # Backtest parameters
         self.initial_capital = Decimal(str(config.trading.portfolio_value))
@@ -145,11 +149,23 @@ class BacktestEngine:
     async def _execute_signal(self, signal, bar: MarketData) -> None:
         """Execute a trading signal in the backtest."""
         try:
-            # Calculate position size (simplified)
-            position_size = self._calculate_position_size(signal, bar.close)
+            # Apply risk management checks (same as real trading)
+            if not await self.risk_manager.evaluate_signal(signal, self.portfolio):
+                self.logger.logger.info(
+                    f"Signal rejected by risk management: {signal.symbol}"
+                )
+                return
+
+            # Calculate position size using risk manager (same as real trading)
+            position_size = await self._calculate_position_size(signal, bar.close)
 
             if position_size <= 0:
                 return
+
+            # Simulate realistic execution with slippage (same as real trading)
+            fill_price = self._simulate_execution_price(
+                bar.close, signal.signal_type, position_size
+            )
 
             # Create order
             order = Order(
@@ -161,7 +177,7 @@ class BacktestEngine:
                 price=bar.close,
                 status=OrderStatus.FILLED,
                 filled_quantity=position_size,
-                average_fill_price=bar.close,
+                average_fill_price=fill_price,
                 created_at=bar.timestamp,
                 updated_at=bar.timestamp,
                 strategy_id=signal.strategy_name,
@@ -204,24 +220,42 @@ class BacktestEngine:
             updated_at=start_date,
         )
 
-    def _calculate_position_size(self, signal, price: Decimal) -> Decimal:
-        """Calculate position size for backtesting."""
-        # Simple position sizing: 5% of portfolio value
-        max_position_value = self.portfolio.total_value * Decimal("0.05")
-        position_size = max_position_value / price
+    async def _calculate_position_size(self, signal, price: Decimal) -> Decimal:
+        """Calculate position size using the same RiskManager as real trading."""
+        if not self.portfolio:
+            return Decimal("0")
 
-        # Ensure we have enough cash
-        required_cash = position_size * price
-        if required_cash > self.portfolio.cash:
-            position_size = self.portfolio.cash / price
-
-        # Round down to whole shares
-        return Decimal(str(int(position_size)))
+        # Use the same risk manager as real trading for position sizing
+        return await self.risk_manager.calculate_position_size(
+            signal.symbol, price, self.portfolio
+        )
 
     def _calculate_commission(self, quantity: Decimal, price: Decimal) -> Decimal:
         """Calculate commission for a trade."""
         commission = max(quantity * self.commission_per_share, self.min_commission)
         return commission
+
+    def _simulate_execution_price(
+        self, market_price: Decimal, signal_type: str, quantity: Decimal
+    ) -> Decimal:
+        """Simulate realistic execution price with slippage (same as real trading)."""
+        # Base slippage factors
+        base_slippage = Decimal("0.001")  # 0.1% base slippage
+
+        # Volume-based slippage (larger orders have more slippage)
+        volume_factor = min(
+            quantity / Decimal("1000"), Decimal("0.005")
+        )  # Max 0.5% additional
+
+        # Market impact simulation
+        total_slippage = base_slippage + volume_factor
+
+        if signal_type == "buy":
+            # Buy orders: pay slightly more (adverse slippage)
+            return market_price * (1 + total_slippage)
+        else:
+            # Sell orders: receive slightly less (adverse slippage)
+            return market_price * (1 - total_slippage)
 
     def _update_portfolio_with_trade(self, trade: Trade) -> None:
         """Update portfolio state with a new trade."""
