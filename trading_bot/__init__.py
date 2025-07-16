@@ -15,7 +15,8 @@ __author__ = "Trading Bot Team"
 
 from .core.bot import TradingBot
 from .core.config import Config
-from .core.exceptions import RiskManagementError, StrategyError, TradingBotError
+from .core.exceptions import (RiskManagementError, StrategyError,
+                              TradingBotError)
 
 __all__ = [
     "TradingBot",

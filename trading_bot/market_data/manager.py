@@ -27,6 +27,7 @@ class MarketDataManager:
         self.connected = False
         self.websocket: Optional[Any] = None
         self.session: Optional[aiohttp.ClientSession] = None
+        self.shutting_down = False  # Flag to prevent reconnection during shutdown
 
         # Data storage
         self.latest_quotes: Dict[str, Quote] = {}
@@ -45,6 +46,7 @@ class MarketDataManager:
         self.reconnect_attempts = 0
         self.max_reconnect_attempts = config.market_data.max_reconnect_attempts
         self.reconnect_delay = config.market_data.websocket_reconnect_delay
+        self.reconnect_task: Optional[asyncio.Task] = None  # Track reconnection task
 
     async def initialize(self) -> None:
         """Initialize market data connections."""
@@ -66,11 +68,30 @@ class MarketDataManager:
         """Shutdown market data connections."""
         self.logger.logger.info("Shutting down market data manager...")
 
-        if self.websocket:
-            await self.websocket.close()
+        # Set shutdown flag to prevent reconnection
+        self.shutting_down = True
 
+        # Cancel any pending reconnection task
+        if self.reconnect_task and not self.reconnect_task.done():
+            self.reconnect_task.cancel()
+            try:
+                await self.reconnect_task
+            except asyncio.CancelledError:
+                pass
+
+        # Close WebSocket connection
+        if self.websocket:
+            try:
+                await self.websocket.close()
+            except Exception as e:
+                self.logger.logger.warning(f"Error closing WebSocket: {e}")
+
+        # Close HTTP session
         if self.session:
-            await self.session.close()
+            try:
+                await self.session.close()
+            except Exception as e:
+                self.logger.logger.warning(f"Error closing HTTP session: {e}")
 
         self.connected = False
         self.logger.logger.info("Market data manager shutdown")
@@ -337,7 +358,19 @@ class MarketDataManager:
         msg_type = data.get("T")
         if msg_type == "error":
             error_msg = data.get("msg", "Unknown error")
+            error_code = data.get("code", 0)
             self.logger.logger.error(f"WebSocket error: {error_msg}")
+
+            # Handle connection limit errors specially
+            if error_code == 406 or "connection limit exceeded" in error_msg.lower():
+                # Don't raise exception, just log and disconnect
+                self.logger.logger.error(
+                    "Connection limit exceeded. Multiple bot instances may be running. "
+                    "Please ensure only one instance is active."
+                )
+                self.connected = False
+                return
+
             raise MarketDataError(f"WebSocket error: {error_msg}")
 
     async def _subscribe_symbol(self, symbol: str) -> None:
@@ -364,11 +397,26 @@ class MarketDataManager:
 
     async def _handle_reconnection(self, error: Exception) -> None:
         """Handle WebSocket reconnection."""
+        # Don't reconnect if shutting down
+        if self.shutting_down:
+            self.logger.logger.info("Skipping reconnection: shutting down")
+            return
+
+        # Check if this is a connection limit error
+        error_str = str(error).lower()
+        if "connection limit exceeded" in error_str or "406" in error_str:
+            self.logger.logger.error(
+                "Connection limit exceeded. This may be due to multiple bot instances. "
+                "Please ensure only one instance is running."
+            )
+            # Stop trying to reconnect for connection limit errors
+            return
+
         if self.reconnect_attempts < self.max_reconnect_attempts:
             self.reconnect_attempts += 1
-            delay = self.reconnect_delay * (
-                2 ** (self.reconnect_attempts - 1)
-            )  # Exponential backoff
+            delay = min(
+                self.reconnect_delay * (2 ** (self.reconnect_attempts - 1)), 60
+            )  # Cap at 60s
 
             self.logger.logger.warning(
                 f"Reconnecting to WebSocket "
@@ -376,22 +424,36 @@ class MarketDataManager:
                 f"{self.max_reconnect_attempts}) in {delay}s..."
             )
 
-            await asyncio.sleep(delay)
+            # Create reconnection task so it can be cancelled during shutdown
+            self.reconnect_task = asyncio.create_task(self._perform_reconnection(delay))
 
-            try:
-                await self._connect_websocket()
-
-                # Re-subscribe to all symbols
-                for symbol in self.subscribed_symbols:
-                    await self._subscribe_symbol(symbol)
-
-            except Exception as reconnect_error:
-                self.logger.log_error(reconnect_error, {"context": "reconnection"})
-                await self._handle_reconnection(reconnect_error)
         else:
             self.logger.logger.error(
                 "Max reconnection attempts reached. Market data disconnected."
             )
+
+    async def _perform_reconnection(self, delay: float) -> None:
+        """Perform the actual reconnection after delay."""
+        try:
+            await asyncio.sleep(delay)
+
+            # Check again if we're shutting down after the delay
+            if self.shutting_down:
+                return
+
+            await self._connect_websocket()
+
+            # Re-subscribe to all symbols
+            for symbol in self.subscribed_symbols:
+                await self._subscribe_symbol(symbol)
+
+        except asyncio.CancelledError:
+            # Task was cancelled during shutdown
+            return
+        except Exception as reconnect_error:
+            self.logger.log_error(reconnect_error, {"context": "reconnection"})
+            if not self.shutting_down:
+                await self._handle_reconnection(reconnect_error)
 
     def _parse_historical_data(
         self, data: Dict[str, Any], symbol: str

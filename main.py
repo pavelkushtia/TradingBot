@@ -12,6 +12,7 @@ A professional-grade trading bot with advanced features:
 """
 
 import asyncio
+import os
 import signal
 import subprocess
 import sys
@@ -21,6 +22,7 @@ from pathlib import Path
 from typing import Optional
 
 import click
+import psutil
 from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress
@@ -63,9 +65,53 @@ class TradingBotCLI:
         signal.signal(signal.SIGINT, signal_handler)
         signal.signal(signal.SIGTERM, signal_handler)
 
+    def check_existing_instances(self):
+        """Check for existing trading bot instances."""
+        current_pid = os.getpid()
+        instances = []
+
+        for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+            try:
+                if proc.info["pid"] == current_pid:
+                    continue
+
+                cmdline = proc.info["cmdline"]
+                if (
+                    cmdline
+                    and "python" in cmdline[0]
+                    and any("main.py" in arg for arg in cmdline)
+                    and any("run" in arg for arg in cmdline)
+                ):
+                    instances.append(proc.info["pid"])
+
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                continue
+
+        return instances
+
     async def run_bot(self):
         """Run the trading bot."""
         try:
+            # Check for existing instances
+            existing_instances = self.check_existing_instances()
+            if existing_instances:
+                console.print(
+                    f"[yellow]Warning: Found {len(existing_instances)} existing trading bot instance(s) "
+                    f"with PID(s): {', '.join(map(str, existing_instances))}[/yellow]"
+                )
+                console.print(
+                    "[yellow]Multiple instances may cause WebSocket connection limit errors.[/yellow]"
+                )
+                console.print(
+                    "[yellow]Consider stopping other instances or use different WebSocket endpoints.[/yellow]"
+                )
+
+                # Ask user if they want to continue
+                response = input("Continue anyway? (y/N): ").lower()
+                if response != "y":
+                    console.print("[yellow]Aborted by user.[/yellow]")
+                    return
+
             self.config = Config.from_env()
             self.bot = TradingBot(self.config)
 
