@@ -180,54 +180,92 @@ class ExecutionManager:
 
     async def _submit_to_exchange(self, order: Order) -> None:
         """Submit order to real exchange (Alpaca implementation)."""
-        # This would implement real exchange integration
-        # For now, just log the submission
+
+        # If in mock mode, skip real exchange submission
+        if self.mock_mode:
+            self.logger.logger.info(
+                f"Mock mode: Skipping real exchange submission for order {order.id}"
+            )
+            return
+
         self.logger.logger.info(f"Submitting order to exchange: {order.id}")
 
-        # Example Alpaca API call structure:
-        # async with aiohttp.ClientSession() as session:
-        #     url = f"{self.config.exchange.base_url}/v2/orders"
-        #     headers = {
-        #         "APCA-API-KEY-ID": self.config.exchange.api_key,
-        #         "APCA-API-SECRET-KEY": self.config.exchange.secret_key
-        #     }
-        #     order_data = {
-        #         "symbol": order.symbol,
-        #         "qty": str(order.quantity),
-        #         "side": order.side.value,
-        #         "type": order.type.value,
-        #         "time_in_force": order.time_in_force
-        #     }
-        #     if order.price:
-        #         order_data["limit_price"] = str(order.price)
-        #
-        #     async with session.post(
-        #         url, json=order_data, headers=headers
-        #     ) as response:
-        #         if response.status == 201:
-        #             result = await response.json()
-        #             order.id = result["id"]
-        #         else:
-        #             raise OrderExecutionError(
-        #                 f"Failed to submit order: {response.status}"
-        #             )
+        try:
+            import aiohttp
+
+            async with aiohttp.ClientSession() as session:
+                url = f"{self.config.exchange.base_url}/v2/orders"
+                headers = {
+                    "APCA-API-KEY-ID": self.config.exchange.api_key,
+                    "APCA-API-SECRET-KEY": self.config.exchange.secret_key,
+                    "Content-Type": "application/json",
+                }
+                order_data = {
+                    "symbol": order.symbol,
+                    "qty": str(order.quantity),
+                    "side": order.side.value,
+                    "type": order.type.value,
+                    "time_in_force": "day",  # Default to day orders
+                }
+                if order.price:
+                    order_data["limit_price"] = str(order.price)
+
+                async with session.post(
+                    url, json=order_data, headers=headers
+                ) as response:
+                    if response.status in [200, 201]:
+                        result = await response.json()
+                        order.id = result["id"]
+                        self.logger.logger.info(
+                            f"Order submitted successfully: {order.id}"
+                        )
+                    else:
+                        error_text = await response.text()
+                        raise OrderExecutionError(
+                            f"Failed to submit order: {response.status} - {error_text}"
+                        )
+        except Exception as e:
+            self.logger.log_error(
+                e, {"context": "exchange_submission", "order_id": order.id}
+            )
+            raise OrderExecutionError(f"Order submission failed: {e}")
 
     async def _cancel_on_exchange(self, order: Order) -> None:
         """Cancel order on real exchange."""
+
+        # If in mock mode, skip real exchange cancellation
+        if self.mock_mode:
+            self.logger.logger.info(
+                f"Mock mode: Skipping real exchange cancellation for order {order.id}"
+            )
+            return
+
         self.logger.logger.info(f"Cancelling order on exchange: {order.id}")
 
-        # Example Alpaca cancellation:
-        # async with aiohttp.ClientSession() as session:
-        #     url = f"{self.config.exchange.base_url}/v2/orders/{order.id}"
-        #     headers = {
-        #         "APCA-API-KEY-ID": self.config.exchange.api_key,
-        #         "APCA-API-SECRET-KEY": self.config.exchange.secret_key
-        #     }
-        #     async with session.delete(url, headers=headers) as response:
-        #         if response.status != 204:
-        #             raise OrderExecutionError(
-        #                 f"Failed to cancel order: {response.status}"
-        #             )
+        try:
+            import aiohttp
+
+            async with aiohttp.ClientSession() as session:
+                url = f"{self.config.exchange.base_url}/v2/orders/{order.id}"
+                headers = {
+                    "APCA-API-KEY-ID": self.config.exchange.api_key,
+                    "APCA-API-SECRET-KEY": self.config.exchange.secret_key,
+                }
+                async with session.delete(url, headers=headers) as response:
+                    if response.status == 204:
+                        self.logger.logger.info(
+                            f"Order cancelled successfully: {order.id}"
+                        )
+                    else:
+                        error_text = await response.text()
+                        raise OrderExecutionError(
+                            f"Failed to cancel order: {response.status} - {error_text}"
+                        )
+        except Exception as e:
+            self.logger.log_error(
+                e, {"context": "exchange_cancellation", "order_id": order.id}
+            )
+            raise OrderExecutionError(f"Order cancellation failed: {e}")
 
     async def _mock_execute_order(self, order: Order) -> None:
         """Mock order execution for simulation."""

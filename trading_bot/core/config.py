@@ -68,10 +68,11 @@ class StrategyConfig(BaseModel):
     def parse_parameters(cls, v: Any) -> Dict[str, Any]:
         if isinstance(v, str):
             try:
-                return json.loads(v)
+                parsed = json.loads(v)
+                return parsed if isinstance(parsed, dict) else {}
             except json.JSONDecodeError:
                 return {}
-        return v
+        return v if isinstance(v, dict) else {}
 
 
 class MarketDataConfig(BaseModel):
@@ -80,6 +81,11 @@ class MarketDataConfig(BaseModel):
     provider: str = Field(default="alpaca")
     websocket_reconnect_delay: int = Field(default=5, gt=0)
     max_reconnect_attempts: int = Field(default=10, gt=0)
+    websocket_url: str = Field(default="wss://stream.data.alpaca.markets/v2/iex")
+    websocket_timeout: int = Field(default=30, gt=0)
+    websocket_ping_interval: int = Field(default=20, gt=0)
+    websocket_ping_timeout: int = Field(default=10, gt=0)
+    data_api_url: str = Field(default="https://data.alpaca.markets/v2")
 
 
 class Config(BaseModel):
@@ -132,17 +138,35 @@ class Config(BaseModel):
             prometheus_port=int(os.getenv("PROMETHEUS_PORT", 8000)),
         )
 
+        # Parse strategy parameters from JSON string
+        strategy_params_str = os.getenv(
+            "STRATEGY_PARAMETERS", '{"short_window": 10, "long_window": 30}'
+        )
+        try:
+            strategy_params = json.loads(strategy_params_str)
+            if not isinstance(strategy_params, dict):
+                strategy_params = {}
+        except json.JSONDecodeError:
+            strategy_params = {}
+
         strategy_config = StrategyConfig(
             default_strategy=os.getenv("DEFAULT_STRATEGY", "momentum_crossover"),
-            parameters=os.getenv(
-                "STRATEGY_PARAMETERS", '{"short_window": 10, "long_window": 30}'
-            ),
+            parameters=strategy_params,
         )
 
         market_data_config = MarketDataConfig(
             provider=os.getenv("MARKET_DATA_PROVIDER", "alpaca"),
             websocket_reconnect_delay=int(os.getenv("WEBSOCKET_RECONNECT_DELAY", 5)),
             max_reconnect_attempts=int(os.getenv("MAX_RECONNECT_ATTEMPTS", 10)),
+            websocket_url=os.getenv(
+                "ALPACA_WEBSOCKET_URL", "wss://stream.data.alpaca.markets/v2/iex"
+            ),
+            websocket_timeout=int(os.getenv("WEBSOCKET_TIMEOUT", 30)),
+            websocket_ping_interval=int(os.getenv("WEBSOCKET_PING_INTERVAL", 20)),
+            websocket_ping_timeout=int(os.getenv("WEBSOCKET_PING_TIMEOUT", 10)),
+            data_api_url=os.getenv(
+                "ALPACA_MARKET_DATA_URL", "https://data.alpaca.markets/v2"
+            ),
         )
 
         return cls(

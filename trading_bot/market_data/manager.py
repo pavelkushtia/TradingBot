@@ -129,9 +129,9 @@ class MarketDataManager:
             start = end - timedelta(minutes=limit)
 
         try:
-            # This is a simplified implementation for Alpaca
-            # In practice, you'd implement different providers
-            url = f"{self.config.exchange.base_url}/v2/stocks/{symbol}/bars"
+            # Use the configured data API endpoint for market data
+            data_api_url = self.config.market_data.data_api_url
+            url = f"{data_api_url}/stocks/{symbol}/bars"
             params = {
                 "timeframe": timeframe,
                 "start": start.isoformat(),
@@ -152,10 +152,14 @@ class MarketDataManager:
                     data = await response.json()
                     return self._parse_historical_data(data, symbol)
                 else:
+                    # If data API fails, try fallback or log gracefully
                     error_text = await response.text()
-                    raise MarketDataError(
-                        f"Failed to fetch historical data: {error_text}"
+                    self.logger.logger.warning(
+                        f"Data API failed for {symbol}: {error_text}. "
+                        f"This may be due to free account limitations."
                     )
+                    # Return empty list for graceful degradation
+                    return []
 
         except Exception as e:
             self.logger.log_error(
@@ -174,10 +178,16 @@ class MarketDataManager:
     async def _connect_websocket(self) -> None:
         """Connect to WebSocket market data feed."""
         try:
-            # Alpaca WebSocket URL
-            ws_url = "wss://stream.data.alpaca.markets/v2/stocks"
+            # Use WebSocket URL from configuration
+            ws_url = self.config.market_data.websocket_url
 
-            self.websocket = await websockets.connect(ws_url)
+            self.logger.logger.info(f"Connecting to WebSocket: {ws_url}")
+
+            self.websocket = await websockets.connect(
+                ws_url,
+                ping_interval=self.config.market_data.websocket_ping_interval,
+                ping_timeout=self.config.market_data.websocket_ping_timeout,
+            )
             self.connected = True
             self.reconnect_attempts = 0
 
@@ -204,7 +214,8 @@ class MarketDataManager:
             while self.connected and self.websocket:
                 try:
                     message = await asyncio.wait_for(
-                        self.websocket.recv(), timeout=30.0
+                        self.websocket.recv(),
+                        timeout=self.config.market_data.websocket_timeout,
                     )
                     await self._process_message(message)
 
