@@ -73,17 +73,32 @@ class TradingBotCLI:
 
         for proc in psutil.process_iter(["pid", "name", "cmdline"]):
             try:
+                # Skip our own process
                 if proc.info["pid"] == current_pid:
                     continue
 
                 cmdline = proc.info["cmdline"]
+                if not cmdline:
+                    continue
+
+                # Check if this is a python process running main.py with 'run' command
                 if (
-                    cmdline
-                    and "python" in cmdline[0]
+                    "python" in cmdline[0].lower()
                     and any("main.py" in arg for arg in cmdline)
                     and any("run" in arg for arg in cmdline)
                 ):
-                    instances.append(proc.info["pid"])
+                    # Additional check: make sure it's actually a different process
+                    # by checking if it started before us
+                    try:
+                        proc_create_time = proc.create_time()
+                        current_create_time = psutil.Process(current_pid).create_time()
+
+                        # Only consider it an existing instance if it started before us
+                        if proc_create_time < current_create_time:
+                            instances.append(proc.info["pid"])
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        # If we can't get process times, skip this process
+                        continue
 
             except (psutil.NoSuchProcess, psutil.AccessDenied):
                 continue

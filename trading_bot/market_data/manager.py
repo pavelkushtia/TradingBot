@@ -101,22 +101,44 @@ class MarketDataManager:
         new_symbols = set(symbols) - self.subscribed_symbols
 
         if new_symbols:
+            # Limit to 15 symbols (based on testing: 15 works, 20 fails)
+            symbol_list = list(new_symbols)[:15]
             self.logger.logger.info(
-                f"Subscribing to {len(new_symbols)} new symbols: {list(new_symbols)}"
+                f"Subscribing to {len(symbol_list)} symbols (limited to 15): {symbol_list}"
             )
 
-            for symbol in new_symbols:
-                await self._subscribe_symbol(symbol)
-                self.subscribed_symbols.add(symbol)
+            # Send all 15 symbols in one single request
+            try:
+                await self._subscribe_symbols_batch(symbol_list)
+                self.logger.logger.info(
+                    f"Successfully subscribed to all {len(symbol_list)} symbols in one request"
+                )
+            except Exception as e:
+                self.logger.logger.error(
+                    f"Failed to subscribe to {len(symbol_list)} symbols: {e}"
+                )
+                raise e
+
+            # Add symbols to subscribed set
+            self.subscribed_symbols.update(symbol_list)
+
+            # Warn if more symbols were requested
+            if len(new_symbols) > 15:
+                self.logger.logger.warning(
+                    f"Requested {len(new_symbols)} symbols but limited to 15"
+                )
 
     async def unsubscribe_symbols(self, symbols: List[str]) -> None:
         """Unsubscribe from market data for given symbols."""
-        for symbol in symbols:
-            if symbol in self.subscribed_symbols:
-                await self._unsubscribe_symbol(symbol)
-                self.subscribed_symbols.discard(symbol)
+        symbols_to_unsubscribe = [s for s in symbols if s in self.subscribed_symbols]
 
-                # Clean up stored data
+        if symbols_to_unsubscribe:
+            # Send one unsubscription request with all symbols
+            await self._unsubscribe_symbols_batch(symbols_to_unsubscribe)
+
+            # Remove symbols from subscribed set and clean up data
+            for symbol in symbols_to_unsubscribe:
+                self.subscribed_symbols.discard(symbol)
                 self.latest_quotes.pop(symbol, None)
                 self.latest_prices.pop(symbol, None)
 
@@ -374,26 +396,34 @@ class MarketDataManager:
             raise MarketDataError(f"WebSocket error: {error_msg}")
 
     async def _subscribe_symbol(self, symbol: str) -> None:
-        """Subscribe to a symbol."""
+        """Subscribe to a single symbol (legacy method for backward compatibility)."""
+        await self._subscribe_symbols_batch([symbol])
+
+    async def _subscribe_symbols_batch(self, symbols: List[str]) -> None:
+        """Subscribe to multiple symbols in a single request."""
         if self.websocket and self.connected:
             subscribe_message = {
                 "action": "subscribe",
-                "quotes": [symbol],
-                "trades": [symbol],
-                "bars": [symbol],
+                "quotes": symbols,
+                "trades": symbols,
+                "bars": symbols,
             }
             await self.websocket.send(json.dumps(subscribe_message))
 
-    async def _unsubscribe_symbol(self, symbol: str) -> None:
-        """Unsubscribe from a symbol."""
+    async def _unsubscribe_symbols_batch(self, symbols: List[str]) -> None:
+        """Unsubscribe from multiple symbols in a single request."""
         if self.websocket and self.connected:
             unsubscribe_message = {
                 "action": "unsubscribe",
-                "quotes": [symbol],
-                "trades": [symbol],
-                "bars": [symbol],
+                "quotes": symbols,
+                "trades": symbols,
+                "bars": symbols,
             }
             await self.websocket.send(json.dumps(unsubscribe_message))
+
+    async def _unsubscribe_symbol(self, symbol: str) -> None:
+        """Unsubscribe from a single symbol (legacy method for backward compatibility)."""
+        await self._unsubscribe_symbols_batch([symbol])
 
     async def _handle_reconnection(self, error: Exception) -> None:
         """Handle WebSocket reconnection."""
