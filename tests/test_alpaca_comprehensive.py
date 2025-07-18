@@ -20,8 +20,6 @@ import json
 import os
 import sys
 from datetime import datetime, timedelta, timezone
-from decimal import Decimal
-from typing import Any, Dict, List, Optional
 
 import aiohttp
 import websockets
@@ -169,7 +167,7 @@ class AlpacaComprehensiveTest:
                     # Extract account information
                     account_status = account_data.get("status", "UNKNOWN")
                     portfolio_value = account_data.get("portfolio_value", "0")
-                    buying_power = account_data.get("buying_power", "0")
+                    account_data.get("buying_power", "0")
 
                     self.print_result(
                         "Account Information",

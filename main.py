@@ -1,3 +1,34 @@
+from rich.console import Console
+from rich.panel import Panel
+from rich.progress import Progress
+from rich.table import Table
+
+from trading_bot import Config, TradingBot
+from trading_bot.backtesting.engine import BacktestEngine
+from trading_bot.core.exceptions import TradingBotError
+from trading_bot.core.models import MarketData
+from trading_bot.strategy.breakout import BreakoutStrategy
+from trading_bot.strategy.mean_reversion import MeanReversionStrategy
+from trading_bot.strategy.momentum_crossover import MomentumCrossoverStrategy
+
+try:
+    import psutil
+
+    PSUTIL_AVAILABLE = True
+except ImportError:
+    PSUTIL_AVAILABLE = False
+import asyncio
+import os
+import signal
+import subprocess
+import sys
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
+from pathlib import Path
+from typing import Optional
+
+import click
+
 print("main.py: START")
 #!/usr/bin/env python3
 """
@@ -12,30 +43,6 @@ A professional-grade trading bot with advanced features:
 - Performance monitoring
 """
 
-import asyncio
-import os
-import signal
-import subprocess
-import sys
-from datetime import datetime, timedelta, timezone
-from decimal import Decimal
-from pathlib import Path
-from typing import Optional
-
-import click
-import psutil
-from rich.console import Console
-from rich.panel import Panel
-from rich.progress import Progress
-from rich.table import Table
-
-from trading_bot import Config, TradingBot
-from trading_bot.backtesting.engine import BacktestEngine
-from trading_bot.core.exceptions import TradingBotError
-from trading_bot.core.models import MarketData
-from trading_bot.strategy.breakout import BreakoutStrategy
-from trading_bot.strategy.mean_reversion import MeanReversionStrategy
-from trading_bot.strategy.momentum_crossover import MomentumCrossoverStrategy
 
 # Add the project root to the path
 project_root = Path(__file__).parent
@@ -68,6 +75,9 @@ class TradingBotCLI:
 
     def check_existing_instances(self):
         """Check for existing trading bot instances."""
+        if not PSUTIL_AVAILABLE:
+            return []
+
         current_pid = os.getpid()
         instances = []
 

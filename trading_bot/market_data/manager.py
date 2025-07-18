@@ -25,6 +25,7 @@ class MarketDataManager:
 
         # Connection state
         self.connected = False
+        self.authenticated = False  # Track authentication state
         self.websocket: Optional[Any] = None
         self.session: Optional[aiohttp.ClientSession] = None
         self.shutting_down = False  # Flag to prevent reconnection during shutdown
@@ -232,6 +233,7 @@ class MarketDataManager:
                 ping_timeout=self.config.market_data.websocket_ping_timeout,
             )
             self.connected = True
+            self.authenticated = False  # Reset authentication state
             self.reconnect_attempts = 0
 
             # Authenticate
@@ -242,13 +244,14 @@ class MarketDataManager:
             }
             await self.websocket.send(json.dumps(auth_message))
 
-            # Start message handling
+            # Start message handling immediately
             asyncio.create_task(self._handle_websocket_messages())
 
-            self.logger.logger.info("WebSocket connected and authenticated")
+            self.logger.logger.info("WebSocket connected and authentication sent")
 
         except Exception as e:
             self.connected = False
+            self.authenticated = False
             await self._handle_reconnection(e)
 
     async def _handle_websocket_messages(self) -> None:
@@ -394,6 +397,17 @@ class MarketDataManager:
                 return
 
             raise MarketDataError(f"WebSocket error: {error_msg}")
+        elif msg_type == "success":
+            if data.get("msg") == "authenticated":
+                self.authenticated = True
+                self.logger.logger.info("WebSocket authenticated successfully")
+        elif msg_type == "subscription":
+            # This message is typically sent after successful subscription
+            # We can use it to confirm if the subscription was successful
+            # For now, we'll just log it.
+            self.logger.logger.info(
+                f"WebSocket subscription successful: {data.get('msg')}"
+            )
 
     async def _subscribe_symbol(self, symbol: str) -> None:
         """Subscribe to a single symbol (legacy method for backward compatibility)."""
@@ -409,6 +423,10 @@ class MarketDataManager:
                 "bars": symbols,
             }
             await self.websocket.send(json.dumps(subscribe_message))
+        else:
+            self.logger.logger.warning(
+                f"Cannot subscribe to symbols: connected={self.connected}, authenticated={self.authenticated}"
+            )
 
     async def _unsubscribe_symbols_batch(self, symbols: List[str]) -> None:
         """Unsubscribe from multiple symbols in a single request."""

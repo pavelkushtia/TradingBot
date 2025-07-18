@@ -1,6 +1,5 @@
 """Backtesting engine for strategy validation and performance analysis."""
 
-import math
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
@@ -14,6 +13,7 @@ from ..core.models import (MarketData, Order, OrderSide, OrderStatus,
 from ..core.shared_execution import SharedExecutionLogic
 from ..risk.manager import RiskManager
 from ..strategy.base import BaseStrategy
+from .simple_metrics import SimplePerformanceMetrics
 
 
 class BacktestEngine:
@@ -32,6 +32,11 @@ class BacktestEngine:
             commission_per_share=Decimal("0.005"), min_commission=Decimal("1.00")
         )
 
+        # Advanced performance calculator - use simplified version
+        self.performance_calculator = SimplePerformanceMetrics(
+            risk_free_rate=config.risk.risk_free_rate
+        )
+
         # Backtest parameters
         self.initial_capital = Decimal(str(config.trading.portfolio_value))
 
@@ -44,6 +49,7 @@ class BacktestEngine:
 
         # Performance metrics
         self.performance_metrics: Optional[PerformanceMetrics] = None
+        self.advanced_metrics: Optional[SimplePerformanceMetrics] = None
 
     async def run_backtest(
         self,
@@ -51,6 +57,7 @@ class BacktestEngine:
         market_data: List[MarketData],
         start_date: datetime,
         end_date: datetime,
+        benchmark_data: Optional[List[MarketData]] = None,
     ) -> Dict[str, Any]:
         """Run backtest for a strategy with historical data."""
         try:
@@ -95,8 +102,13 @@ class BacktestEngine:
             for bar in filtered_data:
                 await self._process_bar(strategy, bar)
 
-            # Calculate final performance metrics
-            self.performance_metrics = self._calculate_performance_metrics(
+            # Calculate comprehensive performance metrics
+            self.advanced_metrics = self._calculate_advanced_performance_metrics(
+                start_date, end_date, benchmark_data
+            )
+
+            # Calculate basic performance metrics for backward compatibility
+            self.performance_metrics = self._calculate_basic_performance_metrics(
                 start_date, end_date
             )
 
@@ -107,6 +119,7 @@ class BacktestEngine:
                 "end_date": end_date.isoformat(),
                 "initial_capital": float(self.initial_capital),
                 "final_capital": float(self.portfolio.total_value),
+                # Basic metrics for backward compatibility
                 "total_return": float(self.performance_metrics.total_return),
                 "sharpe_ratio": float(self.performance_metrics.sharpe_ratio),
                 "max_drawdown": float(self.performance_metrics.max_drawdown),
@@ -115,16 +128,56 @@ class BacktestEngine:
                 "winning_trades": self.performance_metrics.winning_trades,
                 "losing_trades": self.performance_metrics.losing_trades,
                 "profit_factor": float(self.performance_metrics.profit_factor),
+                # Advanced metrics
+                "advanced_metrics": {
+                    "annualized_return": self.advanced_metrics.annualized_return,
+                    "sortino_ratio": self.advanced_metrics.sortino_ratio,
+                    "calmar_ratio": self.advanced_metrics.calmar_ratio,
+                    "information_ratio": self.advanced_metrics.information_ratio,
+                    "volatility": self.advanced_metrics.volatility,
+                    "downside_volatility": self.advanced_metrics.downside_volatility,
+                    "var_95": self.advanced_metrics.var_95,
+                    "var_99": self.advanced_metrics.var_99,
+                    "cvar_95": self.advanced_metrics.cvar_95,
+                    "skewness": self.advanced_metrics.skewness,
+                    "kurtosis": self.advanced_metrics.kurtosis,
+                    "expectancy": self.advanced_metrics.expectancy,
+                    "consecutive_wins": self.advanced_metrics.consecutive_wins,
+                    "consecutive_losses": self.advanced_metrics.consecutive_losses,
+                    "recovery_factor": self.advanced_metrics.recovery_factor,
+                    "max_drawdown_duration": self.advanced_metrics.max_drawdown_duration,
+                },
+                # Benchmark comparison (if available)
+                "benchmark_metrics": {},
+                # Detailed data
                 "trades": [trade.dict() for trade in self.trades],
                 "equity_curve": [
                     (dt.isoformat(), float(value)) for dt, value in self.equity_curve
                 ],
                 "daily_returns": [float(ret) for ret in self.daily_returns],
+                # Performance report
+                "performance_report": self.performance_calculator.generate_performance_report(
+                    self.advanced_metrics
+                ),
             }
+
+            # Add benchmark comparison if available
+            if (
+                self.advanced_metrics.alpha is not None
+                and self.advanced_metrics.beta is not None
+            ):
+                results["benchmark_metrics"] = {
+                    "alpha": self.advanced_metrics.alpha,
+                    "beta": self.advanced_metrics.beta,
+                    "correlation": self.advanced_metrics.correlation,
+                    "tracking_error": self.advanced_metrics.tracking_error,
+                }
 
             self.logger.logger.info(
                 f"Backtest completed. Total return: "
-                f"{self.performance_metrics.total_return:.2%}"
+                f"{self.advanced_metrics.total_return:.2%}, "
+                f"Sharpe: {self.advanced_metrics.sharpe_ratio:.2f}, "
+                f"Max DD: {self.advanced_metrics.max_drawdown:.2%}"
             )
 
             return results
@@ -133,6 +186,49 @@ class BacktestEngine:
             self.logger.log_error(e, {"context": "run_backtest"})
             raise BacktestError(f"Backtest failed: {e}")
 
+    def _calculate_advanced_performance_metrics(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+        benchmark_data: Optional[List[MarketData]] = None,
+    ) -> SimplePerformanceMetrics:
+        """Calculate comprehensive advanced performance metrics."""
+
+        # Convert equity curve to float tuples for the calculator
+        equity_curve_float = [
+            (timestamp, float(value)) for timestamp, value in self.equity_curve
+        ]
+
+        # Prepare benchmark returns if available
+        benchmark_returns = None
+        if benchmark_data:
+            benchmark_returns = self._calculate_benchmark_returns(benchmark_data)
+
+        return self.performance_calculator.calculate_comprehensive_metrics(
+            equity_curve=equity_curve_float,
+            trades=self.trades,
+            benchmark_returns=benchmark_returns,
+            initial_capital=float(self.initial_capital),
+        )
+
+    def _calculate_benchmark_returns(
+        self, benchmark_data: List[MarketData]
+    ) -> List[float]:
+        """Calculate returns from benchmark data."""
+        if len(benchmark_data) < 2:
+            return []
+
+        returns = []
+        for i in range(1, len(benchmark_data)):
+            prev_close = float(benchmark_data[i - 1].close)
+            current_close = float(benchmark_data[i].close)
+            if prev_close > 0:
+                daily_return = (current_close - prev_close) / prev_close
+                returns.append(daily_return)
+
+        return returns
+
+    # Keep existing methods for backward compatibility
     async def _process_bar(self, strategy: BaseStrategy, bar: MarketData) -> None:
         """Process a single market data bar."""
         try:
@@ -352,164 +448,30 @@ class BacktestEngine:
         )
         self.portfolio.updated_at = bar.timestamp
 
-    def _calculate_performance_metrics(
+    def _calculate_basic_performance_metrics(
         self, start_date: datetime, end_date: datetime
     ) -> PerformanceMetrics:
-        """Calculate comprehensive performance metrics."""
+        """Calculate basic performance metrics for backward compatibility."""
         if not self.trades:
             return self._get_empty_performance_metrics(start_date, end_date)
 
-        # Calculate trade-level metrics
-        winning_trades = 0
-        losing_trades = 0
-        total_profit = Decimal("0")
-        total_loss = Decimal("0")
-        wins = []
-        losses = []
-
-        # Group trades by symbol to calculate P&L
-        symbol_trades = {}
-        for trade in self.trades:
-            if trade.symbol not in symbol_trades:
-                symbol_trades[trade.symbol] = []
-            symbol_trades[trade.symbol].append(trade)
-
-        # Calculate P&L for each symbol
-        for symbol, trades in symbol_trades.items():
-            trades.sort(key=lambda x: x.timestamp)
-
-            position_quantity = Decimal("0")
-            position_cost = Decimal("0")
-
-            for trade in trades:
-                if trade.side == OrderSide.BUY:
-                    position_quantity += trade.quantity
-                    position_cost += trade.quantity * trade.price + trade.commission
-                else:  # SELL
-                    if position_quantity > 0:
-                        # Calculate P&L for this sale
-                        sold_quantity = min(trade.quantity, position_quantity)
-                        avg_cost = (
-                            position_cost / position_quantity
-                            if position_quantity > 0
-                            else Decimal("0")
-                        )
-
-                        sale_proceeds = sold_quantity * trade.price - trade.commission
-                        cost_basis = sold_quantity * avg_cost
-
-                        pnl = sale_proceeds - cost_basis
-
-                        if pnl > 0:
-                            winning_trades += 1
-                            total_profit += pnl
-                            wins.append(pnl)
-                        else:
-                            losing_trades += 1
-                            total_loss += abs(pnl)
-                            losses.append(abs(pnl))
-
-                        # Update position
-                        position_quantity -= sold_quantity
-                        if position_quantity > 0:
-                            position_cost = position_cost * (
-                                position_quantity / (position_quantity + sold_quantity)
-                            )
-                        else:
-                            position_cost = Decimal("0")
-
-        # Calculate metrics for closed trades only
-        # total_trades will be set to len(self.trades) below to count ALL trades
-        win_rate = (
-            Decimal(str(winning_trades / (winning_trades + losing_trades)))
-            if (winning_trades + losing_trades) > 0
-            else Decimal("0")
-        )
-
-        average_win = sum(wins) / len(wins) if wins else Decimal("0")
-        average_loss = sum(losses) / len(losses) if losses else Decimal("0")
-        largest_win = max(wins) if wins else Decimal("0")
-        largest_loss = max(losses) if losses else Decimal("0")
-
-        profit_factor = total_profit / total_loss if total_loss > 0 else Decimal("0")
-
-        # Calculate total return
-        total_return = (
-            self.portfolio.total_value - self.initial_capital
-        ) / self.initial_capital
-
-        # Calculate Sharpe ratio (simplified using daily returns)
-        sharpe_ratio = self._calculate_sharpe_ratio()
-
-        # Calculate maximum drawdown
-        max_drawdown = self._calculate_max_drawdown()
-
+        # Use the advanced metrics to populate basic metrics
         return PerformanceMetrics(
-            total_return=total_return,
-            sharpe_ratio=sharpe_ratio,
-            max_drawdown=max_drawdown,
-            win_rate=win_rate,
-            profit_factor=profit_factor,
-            total_trades=len(self.trades),  # BUGFIX: Count all executed trades
-            winning_trades=winning_trades,
-            losing_trades=losing_trades,
-            average_win=average_win,
-            average_loss=average_loss,
-            largest_win=largest_win,
-            largest_loss=largest_loss,
+            total_return=Decimal(str(self.advanced_metrics.total_return)),
+            sharpe_ratio=Decimal(str(self.advanced_metrics.sharpe_ratio)),
+            max_drawdown=Decimal(str(self.advanced_metrics.max_drawdown)),
+            win_rate=Decimal(str(self.advanced_metrics.win_rate)),
+            profit_factor=Decimal(str(self.advanced_metrics.profit_factor)),
+            total_trades=self.advanced_metrics.total_trades,
+            winning_trades=self.advanced_metrics.winning_trades,
+            losing_trades=self.advanced_metrics.losing_trades,
+            average_win=Decimal(str(self.advanced_metrics.average_win)),
+            average_loss=Decimal(str(self.advanced_metrics.average_loss)),
+            largest_win=Decimal(str(self.advanced_metrics.largest_win)),
+            largest_loss=Decimal(str(self.advanced_metrics.largest_loss)),
             period_start=start_date,
             period_end=end_date,
         )
-
-    def _calculate_sharpe_ratio(self) -> Decimal:
-        """Calculate Sharpe ratio from equity curve."""
-        if len(self.equity_curve) < 2:
-            return Decimal("0")
-
-        # Calculate daily returns
-        returns = []
-        for i in range(1, len(self.equity_curve)):
-            prev_value = self.equity_curve[i - 1][1]
-            curr_value = self.equity_curve[i][1]
-            daily_return = (curr_value - prev_value) / prev_value
-            returns.append(float(daily_return))
-
-        if not returns:
-            return Decimal("0")
-
-        # Calculate Sharpe ratio
-        mean_return = sum(returns) / len(returns)
-        variance = sum((r - mean_return) ** 2 for r in returns) / len(returns)
-        std_return = math.sqrt(variance)
-
-        if std_return == 0:
-            return Decimal("0")
-
-        # Annualize (assuming daily data)
-        risk_free_rate = (
-            float(self.config.risk.risk_free_rate) / 252
-        )  # Daily risk-free rate
-        sharpe = (mean_return - risk_free_rate) / std_return * math.sqrt(252)
-
-        return Decimal(str(round(sharpe, 4)))
-
-    def _calculate_max_drawdown(self) -> Decimal:
-        """Calculate maximum drawdown from equity curve."""
-        if len(self.equity_curve) < 2:
-            return Decimal("0")
-
-        peak = self.equity_curve[0][1]
-        max_drawdown = Decimal("0")
-
-        for _, value in self.equity_curve:
-            if value > peak:
-                peak = value
-
-            drawdown = (peak - value) / peak
-            if drawdown > max_drawdown:
-                max_drawdown = drawdown
-
-        return max_drawdown
 
     def _get_empty_performance_metrics(
         self, start_date: datetime, end_date: datetime
@@ -534,30 +496,14 @@ class BacktestEngine:
 
     def generate_report(self) -> Dict[str, Any]:
         """Generate comprehensive backtest report."""
-        if not self.performance_metrics:
+        if self.advanced_metrics:
+            return self.performance_calculator.generate_performance_report(
+                self.advanced_metrics
+            )
+        elif self.performance_metrics:
+            # Fallback to basic performance metrics
+            return self.performance_calculator.generate_performance_report(
+                self.performance_metrics
+            )
+        else:
             return {}
-
-        return {
-            "summary": {
-                "total_return": f"{self.performance_metrics.total_return:.2%}",
-                "sharpe_ratio": f"{self.performance_metrics.sharpe_ratio:.2f}",
-                "max_drawdown": f"{self.performance_metrics.max_drawdown:.2%}",
-                "win_rate": f"{self.performance_metrics.win_rate:.2%}",
-                "profit_factor": f"{self.performance_metrics.profit_factor:.2f}",
-                "total_trades": self.performance_metrics.total_trades,
-            },
-            "trade_analysis": {
-                "winning_trades": self.performance_metrics.winning_trades,
-                "losing_trades": self.performance_metrics.losing_trades,
-                "average_win": f"${self.performance_metrics.average_win:.2f}",
-                "average_loss": f"${self.performance_metrics.average_loss:.2f}",
-                "largest_win": f"${self.performance_metrics.largest_win:.2f}",
-                "largest_loss": f"${self.performance_metrics.largest_loss:.2f}",
-            },
-            "portfolio": {
-                "initial_capital": f"${self.initial_capital:.2f}",
-                "final_value": f"${self.portfolio.total_value:.2f}",
-                "cash": f"${self.portfolio.cash:.2f}",
-                "positions": len(self.portfolio.positions),
-            },
-        }
