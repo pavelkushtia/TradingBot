@@ -3,9 +3,14 @@
 from .manager import RiskManager
 
 try:
-    from .enhanced_manager import (CorrelationAnalyzer, EnhancedRiskManager,
-                                   PositionSizer, PositionSizingResult,
-                                   RiskMetrics, VolatilityCalculator)
+    from .enhanced_manager import (
+        CorrelationAnalyzer,
+        EnhancedRiskManager,
+        PositionSizer,
+        PositionSizingResult,
+        RiskMetrics,
+        VolatilityCalculator,
+    )
 
     ENHANCED_RISK_AVAILABLE = True
     __all__ = [

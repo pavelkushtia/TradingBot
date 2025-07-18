@@ -7,8 +7,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 try:
-    from sklearn.metrics import (mean_absolute_error, mean_squared_error,
-                                 r2_score)
+    from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
     from sklearn.model_selection import TimeSeriesSplit
 
     SKLEARN_AVAILABLE = True

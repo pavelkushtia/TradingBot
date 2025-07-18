@@ -37,7 +37,7 @@ class ExecutionManager:
         # Mock execution for simulation
         self.mock_mode = config.exchange.environment == "sandbox"
         self.mock_fill_delay = 0.1  # seconds
-        
+
         # Order synchronization lock to prevent race conditions
         self._order_lock = asyncio.Lock()
 
@@ -281,7 +281,9 @@ class ExecutionManager:
             async with self._order_lock:
                 # Double-check order still exists and is pending
                 if order.id not in self.pending_orders:
-                    self.logger.logger.info(f"Order {order.id} was cancelled before execution")
+                    self.logger.logger.info(
+                        f"Order {order.id} was cancelled before execution"
+                    )
                     return
 
                 # Simulate different execution scenarios
@@ -296,7 +298,9 @@ class ExecutionManager:
                     # Order remains pending or gets cancelled
                     if order.type == OrderType.LIMIT:
                         # Limit orders can stay pending
-                        self.logger.logger.info(f"Limit order {order.id} remains pending")
+                        self.logger.logger.info(
+                            f"Limit order {order.id} remains pending"
+                        )
                     else:
                         # Market orders that don't fill get rejected
                         await self._mock_reject_order(order, "Insufficient liquidity")

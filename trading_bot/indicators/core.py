@@ -236,7 +236,7 @@ class BollingerBands(TechnicalIndicator):
 
         middle = sum(recent_values) / len(recent_values)  # SMA
         variance = sum((x - middle) ** 2 for x in recent_values) / len(recent_values)
-        std = variance**0.5
+        std = variance ** 0.5
 
         upper = middle + (std * self.std_dev)
         lower = middle - (std * self.std_dev)
@@ -349,7 +349,7 @@ class Stochastic(TechnicalIndicator):
             else:
                 # Handle flat price range - use neutral value (50%)
                 k_percent = 50.0
-                
+
             self.k_values.append(k_percent)
 
             # Calculate %D (SMA of %K)

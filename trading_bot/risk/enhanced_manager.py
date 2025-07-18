@@ -90,7 +90,7 @@ class VolatilityCalculator:
 
         # Calculate GARCH variance
         for return_val in returns[-20:]:  # Use last 20 observations
-            variance = omega + alpha * (return_val**2) + beta * variance
+            variance = omega + alpha * (return_val ** 2) + beta * variance
 
         return math.sqrt(variance * 252)  # Annualized
 

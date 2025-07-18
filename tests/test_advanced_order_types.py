@@ -193,8 +193,11 @@ def test_oco_order():
 
     try:
         from trading_bot.core.models import OrderSide
-        from trading_bot.execution.order_types import (OCOOrder, StopLossOrder,
-                                                       TakeProfitOrder)
+        from trading_bot.execution.order_types import (
+            OCOOrder,
+            StopLossOrder,
+            TakeProfitOrder,
+        )
 
         # Create component orders
         stop_loss = StopLossOrder(

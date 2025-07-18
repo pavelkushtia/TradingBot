@@ -26,24 +26,27 @@ class YahooFinanceProvider(BaseDataProvider):
     async def initialize(self) -> None:
         """Initialize the Yahoo Finance provider."""
         await super().initialize()
-        
+
         # Use transparent, honest identification instead of browser spoofing
         import platform
+
         headers = {
             "User-Agent": f"TradingBot/1.0 Python/{platform.python_version()}",
             "Accept": "application/json, */*",
             "Accept-Encoding": "gzip, deflate",
-            "Connection": "keep-alive"
+            "Connection": "keep-alive",
         }
         self.session = aiohttp.ClientSession(
             timeout=aiohttp.ClientTimeout(total=self.config.timeout), headers=headers
         )
-        
+
         # Add disclaimer in logs about Yahoo Finance usage
         self.logger.logger.warning(
             "Using Yahoo Finance data - ensure compliance with their Terms of Service"
         )
-        self.logger.logger.info("Yahoo Finance provider initialized with transparent headers")
+        self.logger.logger.info(
+            "Yahoo Finance provider initialized with transparent headers"
+        )
 
     async def cleanup(self) -> None:
         """Cleanup resources."""

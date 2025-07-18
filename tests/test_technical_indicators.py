@@ -7,9 +7,17 @@ import numpy as np
 import pytest
 
 from trading_bot.core.models import MarketData
-from trading_bot.indicators import (ATR, EMA, MACD, RSI, SMA, BollingerBands,
-                                    IndicatorConfig, IndicatorManager,
-                                    Stochastic)
+from trading_bot.indicators import (
+    ATR,
+    EMA,
+    MACD,
+    RSI,
+    SMA,
+    BollingerBands,
+    IndicatorConfig,
+    IndicatorManager,
+    Stochastic,
+)
 
 
 @pytest.fixture

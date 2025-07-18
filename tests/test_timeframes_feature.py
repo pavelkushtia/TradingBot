@@ -19,8 +19,7 @@ def test_timeframe_manager():
     print("🧪 Testing MultiTimeframeManager...")
 
     try:
-        from trading_bot.timeframes.manager import (MultiTimeframeManager,
-                                                    Timeframe)
+        from trading_bot.timeframes.manager import MultiTimeframeManager, Timeframe
 
         print("✅ MultiTimeframeManager imported successfully")
     except Exception as e:
@@ -56,8 +55,7 @@ def test_aggregation():
 
     try:
         from trading_bot.core.models import MarketData
-        from trading_bot.timeframes.manager import (Timeframe,
-                                                    TimeframeAggregator)
+        from trading_bot.timeframes.manager import Timeframe, TimeframeAggregator
 
         aggregator = TimeframeAggregator()
         print("✅ TimeframeAggregator created")
@@ -102,9 +100,7 @@ def test_aggregation():
         if len(bars_15m) == expected_15m_bars:
             print(f"✅ 15-minute aggregation successful: {len(bars_15m)} bars")
         else:
-            print(
-                f"❌ Expected {expected_15m_bars} 15-minute bars, got {len(bars_15m)}"
-            )
+            print(f"❌ Expected {expected_15m_bars} 15-minute bars, got {len(bars_15m)}")
             return False
 
         # Verify aggregated bar properties
@@ -130,8 +126,7 @@ def test_multi_timeframe_data():
 
     try:
         from trading_bot.core.models import MarketData
-        from trading_bot.timeframes.manager import (MultiTimeframeManager,
-                                                    Timeframe)
+        from trading_bot.timeframes.manager import MultiTimeframeManager, Timeframe
 
         manager = MultiTimeframeManager()
 
@@ -199,8 +194,7 @@ def test_timeframe_synchronization():
 
     try:
         from trading_bot.core.models import MarketData
-        from trading_bot.timeframes.manager import (MultiTimeframeManager,
-                                                    Timeframe)
+        from trading_bot.timeframes.manager import MultiTimeframeManager, Timeframe
 
         manager = MultiTimeframeManager()
         manager.add_timeframe(Timeframe.M1)

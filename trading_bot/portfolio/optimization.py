@@ -294,7 +294,7 @@ class PortfolioOptimizer:
             C = np.dot(expected_returns.T, np.dot(inv_cov, expected_returns))
 
             # Calculate lambda for target return
-            discriminant = B**2 - A * (C - 2 * A * target_return)
+            discriminant = B ** 2 - A * (C - 2 * A * target_return)
 
             if discriminant < 0:
                 # Target return not achievable, use equal weights
