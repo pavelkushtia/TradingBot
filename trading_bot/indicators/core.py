@@ -346,16 +346,20 @@ class Stochastic(TechnicalIndicator):
 
             if highest_high != lowest_low:
                 k_percent = ((close - lowest_low) / (highest_high - lowest_low)) * 100
-                self.k_values.append(k_percent)
+            else:
+                # Handle flat price range - use neutral value (50%)
+                k_percent = 50.0
+                
+            self.k_values.append(k_percent)
 
-                # Calculate %D (SMA of %K)
-                if len(self.k_values) >= self.d_period:
-                    self.ready = True
-                    recent_k = list(self.k_values)[-self.d_period :]
-                    d_percent = sum(recent_k) / len(recent_k)
+            # Calculate %D (SMA of %K)
+            if len(self.k_values) >= self.d_period:
+                self.ready = True
+                recent_k = list(self.k_values)[-self.d_period :]
+                d_percent = sum(recent_k) / len(recent_k)
 
-                    result_dict = {"%K": k_percent, "%D": d_percent}
-                    return IndicatorResult(self.get_name(), result_dict)
+                result_dict = {"%K": k_percent, "%D": d_percent}
+                return IndicatorResult(self.get_name(), result_dict)
 
         return None
 
