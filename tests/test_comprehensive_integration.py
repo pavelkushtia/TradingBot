@@ -368,12 +368,13 @@ class TestComprehensiveIntegration:
         """Test backtesting with comprehensive performance metrics."""
         # Create config
         config = Config.from_env()
+        event_bus = MagicMock()
 
         # Create strategy
         strategy = ComprehensiveTestStrategy("backtest_test", {"backtest": True})
 
         # Create backtest engine
-        backtest_engine = BacktestEngine(config)
+        backtest_engine = BacktestEngine(config, event_bus)
 
         # Prepare data (use first symbol for simplicity)
         symbol = list(sample_comprehensive_data.keys())[0]

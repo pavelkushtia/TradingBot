@@ -5,6 +5,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..core.config import Config
+from ..core.events import EventBus
 from ..core.exceptions import BacktestError
 from ..core.logging import TradingLogger
 from ..core.models import (MarketData, Order, OrderSide, OrderStatus,
@@ -19,13 +20,14 @@ from .simple_metrics import SimplePerformanceMetrics
 class BacktestEngine:
     """High-performance backtesting engine for strategy validation."""
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, event_bus: EventBus):
         """Initialize backtesting engine."""
         self.config = config
         self.logger = TradingLogger("backtest_engine")
+        self.event_bus = event_bus
 
         # Initialize risk manager (same as real trading)
-        self.risk_manager = RiskManager(config)
+        self.risk_manager = RiskManager(config, self.event_bus)
 
         # Initialize shared execution logic (same as real trading)
         self.shared_execution = SharedExecutionLogic(
@@ -321,19 +323,25 @@ class BacktestEngine:
             )
 
     def _initialize_portfolio(self, start_date: datetime) -> None:
-        """Initialize portfolio for backtesting."""
+        """Initialize the portfolio for backtesting."""
         self.portfolio = Portfolio(
+            initial_capital=self.initial_capital,
+            start_date=start_date,
             total_value=self.initial_capital,
             buying_power=self.initial_capital,
             cash=self.initial_capital,
-            positions={},
-            day_pnl=Decimal("0"),
-            total_pnl=Decimal("0"),
             updated_at=start_date,
+        )
+        self.trades = []
+        self.orders = []
+        self.daily_returns = []
+        self.equity_curve = [(start_date, self.initial_capital)]
+        self.logger.logger.info(
+            f"Portfolio initialized with {self.initial_capital} capital."
         )
 
     async def _calculate_position_size(self, signal, price: Decimal) -> Decimal:
-        """Calculate position size using the same RiskManager as real trading."""
+        """Calculate position size based on risk parameters."""
         if not self.portfolio:
             return Decimal("0")
 

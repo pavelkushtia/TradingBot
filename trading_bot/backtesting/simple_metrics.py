@@ -11,6 +11,29 @@ class SimplePerformanceMetrics:
 
     def __init__(self, risk_free_rate: float = 0.02):
         self.risk_free_rate = risk_free_rate
+        self.annualized_return = 0.0
+        self.sortino_ratio = 0.0
+        self.calmar_ratio = 0.0
+        self.information_ratio = 0.0
+        self.volatility = 0.0
+        self.downside_volatility = 0.0
+        self.var_95 = 0.0
+        self.var_99 = 0.0
+        self.cvar_95 = 0.0
+        self.skewness = 0.0
+        self.kurtosis = 0.0
+        self.expectancy = 0.0
+        self.consecutive_wins = 0
+        self.consecutive_losses = 0
+        self.recovery_factor = 0.0
+        self.max_drawdown_duration = 0
+        self.alpha = 0.0
+        self.beta = 0.0
+        self.total_return = 0.0
+        self.sharpe_ratio = 0.0
+        self.max_drawdown = 0.0
+        self.correlation = 0.0
+        self.tracking_error = 0.0
 
     def calculate_metrics(
         self,

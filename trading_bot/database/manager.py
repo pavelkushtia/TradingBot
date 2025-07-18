@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 import aiosqlite
 
 from ..core.config import Config
+from ..core.events import OrderEvent
 from ..core.exceptions import DatabaseError
 from ..core.logging import TradingLogger
 from ..core.models import Order, PerformanceMetrics, Portfolio, Position, Trade
@@ -22,6 +23,10 @@ class DatabaseManager:
         self.logger = TradingLogger("database_manager")
         self.db_path = self._extract_db_path(config.database.url)
         self.connection: Optional[aiosqlite.Connection] = None
+
+    async def on_order_update(self, event: OrderEvent) -> None:
+        """Handle order update."""
+        await self.save_order(event.order)
 
     async def initialize(self) -> None:
         """Initialize database connection and create tables."""

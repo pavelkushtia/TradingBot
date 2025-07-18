@@ -1,8 +1,10 @@
 """Momentum crossover strategy implementation."""
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from ..core.models import StrategySignal
+from ..core.models import MarketData
+from ..core.signal import StrategySignal
 from .base import BaseStrategy
 
 
@@ -65,7 +67,7 @@ class MomentumCrossoverStrategy(BaseStrategy):
 
         # Temporarily store current bars and calculate previous MAs
         current_bars = self.market_data[symbol]
-        self.market_data[symbol] = bars_minus_one
+        self.market_data[symbol] = list(bars_minus_one)
 
         short_ma_previous = self.calculate_sma(symbol, self.short_window)
         long_ma_previous = self.calculate_sma(symbol, self.long_window)

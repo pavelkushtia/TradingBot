@@ -33,6 +33,8 @@ class OrderStatus(str, Enum):
     CANCELED = "canceled"
     REJECTED = "rejected"
     EXPIRED = "expired"
+    PENDING = "pending"
+    ACCEPTED = "accepted"
 
 
 class PositionSide(str, Enum):
@@ -95,7 +97,8 @@ class Order(BaseModel):
     time_in_force: str = "day"
     status: OrderStatus = OrderStatus.NEW
     filled_quantity: Decimal = Decimal("0")
-    average_fill_price: Optional[Decimal] = None
+    filled_avg_price: Optional[Decimal] = None
+    commission: Optional[Decimal] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     strategy_id: Optional[str] = None
@@ -153,7 +156,8 @@ class Trade(BaseModel):
     quantity: Decimal
     price: Decimal
     timestamp: datetime
-    commission: Decimal = Decimal("0")
+    commission: Decimal = Decimal("0.0")
+    pnl: Optional[Decimal] = None
     strategy_id: Optional[str] = None
 
     @property
@@ -168,13 +172,14 @@ class Trade(BaseModel):
 class Portfolio(BaseModel):
     """Portfolio model."""
 
+    initial_capital: Decimal
     total_value: Decimal
     buying_power: Decimal
     cash: Decimal
     positions: Dict[str, Position] = Field(default_factory=dict)
-    day_pnl: Decimal = Decimal("0")
-    total_pnl: Decimal = Decimal("0")
+    start_date: datetime
     updated_at: datetime
+    day_pnl: Decimal = Decimal("0")
 
     @property
     def total_market_value(self) -> Decimal:
@@ -190,22 +195,7 @@ class Portfolio(BaseModel):
 
     class Config:
         json_encoders = {Decimal: str, datetime: lambda v: v.isoformat()}
-
-
-class StrategySignal(BaseModel):
-    """Strategy signal model."""
-
-    symbol: str
-    signal_type: str  # "buy", "sell", "hold"
-    strength: float = Field(ge=-1.0, le=1.0)  # Signal strength from -1 to 1
-    price: Optional[Decimal] = None
-    quantity: Optional[Decimal] = None
-    timestamp: datetime
-    strategy_name: str
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-
-    class Config:
-        json_encoders = {Decimal: str, datetime: lambda v: v.isoformat()}
+        validate_assignment = True
 
 
 class PerformanceMetrics(BaseModel):

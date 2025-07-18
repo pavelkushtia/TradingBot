@@ -237,7 +237,7 @@ class DataProviderManager:
         """Get real-time quote with intelligent provider selection."""
         # Check cache first (shorter TTL for real-time data)
         cache_key = f"quote:{symbol}"
-        cached_quote = self._get_from_cache(cache_key, ttl=60)  # 1 minute cache
+        cached_quote = self._get_from_cache(cache_key)
         if cached_quote:
             return cached_quote
 
@@ -257,7 +257,7 @@ class DataProviderManager:
                 quote = await provider.get_real_time_quote(symbol)
 
                 # Cache successful result
-                self._set_cache(cache_key, quote, ttl=60)
+                self._set_cache(cache_key, quote)
 
                 # Record usage
                 await self.cost_tracker.record_usage(
@@ -289,7 +289,7 @@ class DataProviderManager:
         """Get company fundamentals with intelligent provider selection."""
         # Check cache first (longer TTL for fundamentals)
         cache_key = f"fundamentals:{symbol}"
-        cached_data = self._get_from_cache(cache_key, ttl=3600)  # 1 hour cache
+        cached_data = self._get_from_cache(cache_key)
         if cached_data:
             return cached_data
 
@@ -309,7 +309,7 @@ class DataProviderManager:
 
                 if fundamentals:
                     # Cache successful result
-                    self._set_cache(cache_key, fundamentals, ttl=3600)
+                    self._set_cache(cache_key, fundamentals)
 
                     # Record usage
                     await self.cost_tracker.record_usage(
@@ -353,7 +353,7 @@ class DataProviderManager:
                     "available": is_available,
                     "connection_ok": connection_ok,
                     "priority": provider.config.priority,
-                    "rate_limit": provider.config.rate_limit_per_minute,
+                    "rate_limit": provider.config.rate_limit,
                     "cost_per_call": provider.config.cost_per_call,
                 }
             except Exception as e:
@@ -370,43 +370,44 @@ class DataProviderManager:
         return await self.cost_tracker.get_report()
 
     async def _create_provider_configs(self) -> List[DataProviderConfig]:
-        """Create provider configurations from environment and config."""
-        configs = []
+        """Create provider configurations from the main config."""
+        provider_configs = []
 
-        # Alpaca (Primary)
-        if hasattr(self.config.exchange, "api_key") and self.config.exchange.api_key:
-            configs.append(
+        # Alpaca
+        if self.config.exchange.name == "alpaca":
+            provider_configs.append(
                 DataProviderConfig(
                     name="alpaca",
-                    api_key=self.config.exchange.api_key,
-                    secret_key=getattr(self.config.exchange, "secret_key", None),
-                    base_url=getattr(self.config.exchange, "base_url", None),
-                    rate_limit_per_minute=200,  # Alpaca free tier
-                    priority=1,
-                    cost_per_call=0.0,
                     enabled=True,
+                    priority=1,
+                    api_key=os.getenv("ALPACA_API_KEY", ""),
+                    secret_key=os.getenv("ALPACA_SECRET_KEY", ""),
+                    base_url=os.getenv(
+                        "ALPACA_BASE_URL", "https://paper-api.alpaca.markets"
+                    ),
+                    cost_per_call=0.0,
+                    rate_limit=200,
                 )
             )
 
-        # Alpha Vantage (Fallback)
-        alpha_vantage_key = os.getenv("ALPHA_VANTAGE_API_KEY")
-        if alpha_vantage_key:
-            configs.append(
+        # Alpha Vantage
+        if os.getenv("ALPHA_VANTAGE_API_KEY"):
+            provider_configs.append(
                 DataProviderConfig(
                     name="alpha_vantage",
-                    api_key=alpha_vantage_key,
-                    rate_limit_per_minute=25,  # Alpha Vantage free tier: 25 calls/day -> limit per minute
+                    api_key=os.getenv("ALPHA_VANTAGE_API_KEY"),
                     priority=2,
                     cost_per_call=0.0,
                     enabled=True,
+                    rate_limit=25,
                 )
             )
 
         # Yahoo Finance (Last resort)
-        configs.append(
+        provider_configs.append(
             DataProviderConfig(
                 name="yahoo",
-                rate_limit_per_minute=60,  # Conservative rate limiting
+                rate_limit=60,  # Conservative rate limiting
                 priority=3,
                 cost_per_call=0.0,
                 enabled=True,
@@ -414,7 +415,7 @@ class DataProviderManager:
             )
         )
 
-        return configs
+        return provider_configs
 
     async def _get_sorted_providers(self) -> List[BaseDataProvider]:
         """Get providers sorted by priority and availability."""
@@ -431,16 +432,13 @@ class DataProviderManager:
         """Generate cache key with TTL."""
         return f"{key}:{int(datetime.now().timestamp())}"
 
-    def _get_from_cache(self, key: str, ttl: int = None) -> Any:
+    def _get_from_cache(self, key: str) -> Any:
         """Get data from cache if not expired."""
-        if ttl is None:
-            ttl = self._cache_ttl
-
         if key in self._cache:
             cached_item = self._cache[key]
             cached_time = cached_item.get("timestamp", 0)
 
-            if datetime.now().timestamp() - cached_time < ttl:
+            if datetime.now().timestamp() - cached_time < self._cache_ttl:
                 return cached_item.get("data")
             else:
                 # Remove expired item
@@ -448,15 +446,12 @@ class DataProviderManager:
 
         return None
 
-    def _set_cache(self, key: str, data: Any, ttl: int = None) -> None:
+    def _set_cache(self, key: str, data: Any) -> None:
         """Set data in cache with timestamp."""
-        if ttl is None:
-            ttl = self._cache_ttl
-
         self._cache[key] = {
             "data": data,
             "timestamp": datetime.now().timestamp(),
-            "ttl": ttl,
+            "ttl": self._cache_ttl,
         }
 
         # Simple cache size management (keep last 1000 items)

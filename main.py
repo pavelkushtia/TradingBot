@@ -5,6 +5,7 @@ from rich.table import Table
 
 from trading_bot import Config, TradingBot
 from trading_bot.backtesting.engine import BacktestEngine
+from trading_bot.core.events import EventBus
 from trading_bot.core.exceptions import TradingBotError
 from trading_bot.core.models import MarketData
 from trading_bot.strategy.breakout import BreakoutStrategy
@@ -115,7 +116,7 @@ class TradingBotCLI:
 
         return instances
 
-    async def run_bot(self, symbols: str):
+    async def run_bot(self, symbols: str, verbose: bool = False):
         """Run the trading bot."""
         try:
             # Check for existing instances
@@ -139,9 +140,12 @@ class TradingBotCLI:
                     return
 
             self.config = Config.from_env()
+            if verbose:
+                self.config.logging.level = "DEBUG"
+
             # Override trading symbols with CLI argument
             if symbols:
-                self.config.trading.trading_symbols = symbols
+                self.config.strategy.symbols = symbols.split(",")
 
             self.bot = TradingBot(self.config)
 
@@ -153,7 +157,7 @@ class TradingBotCLI:
                     f"Strategy: {self.config.strategy.default_strategy}\n"
                     f"Portfolio Value: "
                     f"${self.config.trading.portfolio_value:,.2f}\n"
-                    f"Trading Symbols: {self.config.trading.trading_symbols}",
+                    f"Trading Symbols: {','.join(self.config.strategy.symbols)}",
                     title="🚀 Trading Bot",
                 )
             )
@@ -240,7 +244,8 @@ class TradingBotCLI:
             market_data = self.generate_sample_data(symbol, days)
 
             # Run backtest
-            backtest_engine = BacktestEngine(self.config)
+            event_bus = EventBus()
+            backtest_engine = BacktestEngine(self.config, event_bus)
 
             start_date = datetime.now(timezone.utc) - timedelta(days=days)
             end_date = datetime.now(timezone.utc)
@@ -384,10 +389,14 @@ def cli():
     default=None,
     help="Comma-separated list of symbols to trade (e.g., AAPL,GOOGL,MSFT)",
 )
-def run(symbols):
-    """Run the trading bot in live mode."""
-    bot_cli = TradingBotCLI()
-    asyncio.run(bot_cli.run_bot(symbols))
+@click.option("--verbose", is_flag=True, help="Enable verbose logging.")
+def run(symbols, verbose):
+    """Run the trading bot."""
+    cli_instance = TradingBotCLI()
+    try:
+        asyncio.run(cli_instance.run_bot(symbols, verbose))
+    except KeyboardInterrupt:
+        console.print("[yellow]Trading bot stopped by user.[/yellow]")
 
 
 @cli.command()

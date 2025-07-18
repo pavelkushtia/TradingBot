@@ -95,13 +95,16 @@ class DataProviderConfig:
     api_key: Optional[str] = None
     secret_key: Optional[str] = None
     base_url: Optional[str] = None
-    rate_limit_per_minute: int = 60
+    rate_limit: int = 60
     max_retries: int = 3
     timeout: float = 10.0
     priority: int = 1  # Lower number = higher priority
     cost_per_call: float = 0.0  # For cost optimization
     enabled: bool = True
     fallback_on_error: bool = True
+    host: Optional[str] = None
+    port: Optional[int] = None
+    clientId: Optional[int] = None
 
 
 class BaseDataProvider(ABC):
@@ -110,7 +113,7 @@ class BaseDataProvider(ABC):
     def __init__(self, config: DataProviderConfig):
         self.config = config
         self.logger = TradingLogger(f"provider_{config.name}")
-        self.rate_limiter = AsyncRateLimiter(config.rate_limit_per_minute)
+        self.rate_limiter = AsyncRateLimiter(config.rate_limit)
         self.circuit_breaker = CircuitBreaker()
         self._initialized = False
 

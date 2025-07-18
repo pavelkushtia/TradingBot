@@ -11,10 +11,12 @@ from ..market_data.manager import MarketDataManager
 from ..risk.manager import RiskManager
 from ..strategy.manager import StrategyManager
 from .config import Config
+from .events import EventBus
 from .exceptions import RiskManagementError, TradingBotError
 from .logging import TradingLogger, setup_logging
-from .models import Order, Portfolio, Position, StrategySignal
+from .models import Order, Portfolio, Position
 from .shared_execution import SharedExecutionLogic
+from .signal import StrategySignal
 
 
 class TradingBot:
@@ -30,12 +32,15 @@ class TradingBot:
         setup_logging(config.logging)
         self.logger = TradingLogger("trading_bot")
 
+        # Initialize event bus
+        self.event_bus = EventBus()
+
         # Initialize managers
-        self.market_data_manager = MarketDataManager(config)
-        self.strategy_manager = StrategyManager(config)
-        self.risk_manager = RiskManager(config)
-        self.execution_manager = ExecutionManager(config)
-        self.database_manager = DatabaseManager(config)
+        self.market_data_manager = MarketDataManager(self.config, self.event_bus)
+        self.strategy_manager = StrategyManager(self.config, self.event_bus)
+        self.risk_manager = RiskManager(self.config, self.event_bus)
+        self.execution_manager = ExecutionManager(self.config, self.event_bus)
+        self.database_manager = DatabaseManager(self.config)
 
         # Initialize shared execution logic (same as backtesting)
         self.shared_execution = SharedExecutionLogic()
@@ -62,8 +67,11 @@ class TradingBot:
             # Load initial portfolio state
             await self._load_portfolio()
 
+            # Setup event listeners
+            self._setup_event_listeners()
+
             # Start main trading loop
-            await self._run_trading_loop()
+            asyncio.create_task(self._run_trading_loop())
 
         except Exception as e:
             self.logger.log_error(e, {"context": "bot_start"})
@@ -85,6 +93,14 @@ class TradingBot:
 
         self.logger.logger.info("Trading bot stopped")
 
+    def _setup_event_listeners(self) -> None:
+        """Setup event listeners."""
+        self.event_bus.subscribe("market_data", self.strategy_manager.on_market_data)
+        self.event_bus.subscribe("signal", self.risk_manager.on_signal)
+        self.event_bus.subscribe("signal_approved", self.execution_manager.on_signal)
+        self.event_bus.subscribe("order_filled", self.database_manager.on_order_update)
+        self.event_bus.subscribe("order_updated", self.database_manager.on_order_update)
+
     async def _initialize_managers(self) -> None:
         """Initialize all manager components."""
         await self.database_manager.initialize()
@@ -98,7 +114,7 @@ class TradingBot:
 
     async def _initialize_strategy_symbols(self) -> None:
         """Initialize strategies with configured symbols."""
-        configured_symbols = self.config.trading.trading_symbols.split(",")
+        configured_symbols = self.config.strategy.symbols
         configured_symbols = [s.strip() for s in configured_symbols if s.strip()]
 
         # Add configured symbols to all strategies
@@ -119,24 +135,36 @@ class TradingBot:
         await self.database_manager.shutdown()
 
     async def _load_portfolio(self) -> None:
-        """Load portfolio state from database."""
+        """Load portfolio state from database, or create a new one."""
         self.portfolio = await self.database_manager.get_portfolio()
-        if self.portfolio:
-            self.start_portfolio_value = self.portfolio.total_value
-            self.positions = self.portfolio.positions
-
-            # Load active orders
-            active_orders = await self.database_manager.get_active_orders()
-            self.active_orders = {
-                order.id: order for order in active_orders if order.id
-            }
-
-            self.logger.logger.info(
-                "Portfolio loaded",
-                total_value=str(self.portfolio.total_value),
-                positions=len(self.positions),
-                active_orders=len(self.active_orders),
+        if not self.portfolio:
+            initial_capital = Decimal(str(self.config.trading.portfolio_value))
+            self.portfolio = Portfolio(
+                initial_capital=initial_capital,
+                start_date=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+                total_value=initial_capital,
+                cash=initial_capital,
+                buying_power=initial_capital,
             )
+            self.logger.logger.info(
+                "No existing portfolio found. Created a new one.",
+                initial_capital=str(initial_capital),
+            )
+
+        self.start_portfolio_value = self.portfolio.total_value
+        self.positions = self.portfolio.positions
+
+        # Load active orders
+        active_orders = await self.database_manager.get_active_orders()
+        self.active_orders = {order.id: order for order in active_orders if order.id}
+
+        self.logger.logger.info(
+            "Portfolio loaded",
+            total_value=str(self.portfolio.total_value),
+            positions=len(self.positions),
+            active_orders=len(self.active_orders),
+        )
 
     async def _run_trading_loop(self) -> None:
         """Main trading loop."""
@@ -147,23 +175,7 @@ class TradingBot:
                 # Process market data updates
                 await self._process_market_data()
 
-                # Generate strategy signals
-                signals = await self._generate_signals()
-
-                # Process signals through risk management
-                filtered_signals = await self._filter_signals(signals)
-
-                # Execute approved signals
-                await self._execute_signals(filtered_signals)
-
-                # Update portfolio and positions
-                await self._update_portfolio()
-
-                # Check risk limits
-                await self._check_risk_limits()
-
-                # Save state to database
-                await self._save_state()
+                # Event-driven logic will handle the rest
 
                 # Sleep briefly to avoid excessive CPU usage
                 await asyncio.sleep(0.1)
@@ -179,7 +191,7 @@ class TradingBot:
     async def _process_market_data(self) -> None:
         """Process incoming market data updates."""
         # Get symbols from configuration and current positions/orders
-        configured_symbols = self.config.trading.trading_symbols.split(",")
+        configured_symbols = self.config.strategy.symbols
         configured_symbols = [s.strip() for s in configured_symbols if s.strip()]
 
         # Combine configured symbols with current positions and orders
@@ -194,61 +206,20 @@ class TradingBot:
 
     async def _generate_signals(self) -> List[StrategySignal]:
         """Generate trading signals from all active strategies."""
-        return await self.strategy_manager.generate_signals()
+        # This will be handled by the event bus
+        return []
 
     async def _filter_signals(
         self, signals: List[StrategySignal]
     ) -> List[StrategySignal]:
         """Filter signals through risk management."""
-        filtered_signals = []
-
-        for signal in signals:
-            try:
-                # Check if signal passes risk management
-                is_approved = await self.risk_manager.evaluate_signal(
-                    signal, self.portfolio
-                )
-
-                if is_approved:
-                    filtered_signals.append(signal)
-                else:
-                    self.logger.log_risk_event(
-                        "signal_rejected",
-                        {
-                            "symbol": signal.symbol,
-                            "signal_type": signal.signal_type,
-                            "strategy": signal.strategy_name,
-                        },
-                    )
-            except Exception as e:
-                self.logger.log_error(
-                    e, {"context": "signal_filtering", "signal": signal.dict()}
-                )
-
-        return filtered_signals
+        # This will be handled by the event bus
+        return []
 
     async def _execute_signals(self, signals: List[StrategySignal]) -> None:
         """Execute approved trading signals."""
-        for signal in signals:
-            try:
-                # Convert signal to order
-                order = await self._signal_to_order(signal)
-
-                if order:
-                    # Submit order for execution
-                    executed_order = await self.execution_manager.submit_order(order)
-
-                    if executed_order and executed_order.id:
-                        self.active_orders[executed_order.id] = executed_order
-                        self.logger.log_order(executed_order.dict(), "submitted")
-
-                        # Save order to database
-                        await self.database_manager.save_order(executed_order)
-
-            except Exception as e:
-                self.logger.log_error(
-                    e, {"context": "signal_execution", "signal": signal.dict()}
-                )
+        # This will be handled by the event bus
+        pass
 
     async def _signal_to_order(self, signal: StrategySignal) -> Optional[Order]:
         """Convert a strategy signal to an order (shared logic with backtesting)."""
@@ -261,7 +232,7 @@ class TradingBot:
         return self.shared_execution.signal_to_order(signal, position_size)
 
     async def _update_portfolio(self) -> None:
-        """Update portfolio with latest market data and positions."""
+        """Update portfolio state."""
         if not self.portfolio:
             return
 

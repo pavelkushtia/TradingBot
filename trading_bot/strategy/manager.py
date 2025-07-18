@@ -4,9 +4,11 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Type
 
 from ..core.config import Config
+from ..core.events import EventBus, MarketDataEvent, SignalEvent
 from ..core.exceptions import StrategyError
 from ..core.logging import TradingLogger
-from ..core.models import MarketData, Quote, StrategySignal
+from ..core.models import MarketData, Quote
+from ..core.signal import StrategySignal
 from .base import BaseStrategy
 from .breakout import BreakoutStrategy
 from .mean_reversion import MeanReversionStrategy
@@ -16,41 +18,45 @@ from .momentum_crossover import MomentumCrossoverStrategy
 class StrategyManager:
     """Manager for multiple trading strategies."""
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, event_bus: EventBus):
         """Initialize strategy manager."""
         self.config = config
+        self.event_bus = event_bus
         self.logger = TradingLogger("strategy_manager")
 
-        # Active strategies
+        # Load strategies from config
         self.strategies: Dict[str, BaseStrategy] = {}
-
-        # Available strategy classes
-        self.strategy_classes: Dict[str, Type[BaseStrategy]] = {
+        self.strategy_classes: Dict[str, type[BaseStrategy]] = {
             "momentum_crossover": MomentumCrossoverStrategy,
             "mean_reversion": MeanReversionStrategy,
             "breakout": BreakoutStrategy,
         }
-
-        # Performance tracking
         self.signal_count = 0
         self.last_signal_time: Optional[datetime] = None
 
     async def initialize(self) -> None:
-        """Initialize strategy manager."""
-        try:
-            self.logger.logger.info("Initializing strategy manager...")
+        """Initialize strategies."""
+        await self.add_strategy(
+            self.config.strategy.default_strategy, self.config.strategy.parameters
+        )
 
-            # Load default strategy
-            await self.add_strategy(
-                self.config.strategy.default_strategy, self.config.strategy.parameters
-            )
-
-            self.logger.logger.info(
-                f"Strategy manager initialized with {len(self.strategies)} strategies"
-            )
-
-        except Exception as e:
-            raise StrategyError(f"Failed to initialize strategy manager: {e}")
+    async def on_market_data(self, event: MarketDataEvent) -> None:
+        """Handle new market data."""
+        self.logger.logger.debug(f"Market data received for {event.market_data.symbol}")
+        for strategy in self.strategies.values():
+            try:
+                await strategy.on_bar(event.market_data.symbol, event.market_data)
+            except Exception as e:
+                self.logger.log_error(
+                    e,
+                    {
+                        "context": "market_data_update",
+                        "symbol": event.market_data.symbol,
+                    },
+                )
+        signals = await self.generate_signals()
+        for signal in signals:
+            await self.event_bus.publish("signal", SignalEvent(signal))
 
     async def shutdown(self) -> None:
         """Shutdown strategy manager."""
@@ -106,6 +112,7 @@ class StrategyManager:
                 for signal in signals:
                     signal.strategy_name = strategy_name
                     all_signals.append(signal)
+                    self.logger.logger.debug(f"Signal generated: {signal.dict()}")
 
                     self.logger.log_strategy_signal(signal.dict())
 

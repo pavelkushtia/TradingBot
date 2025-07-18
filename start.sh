@@ -1,4 +1,5 @@
 #!/bin/bash
+echo "Starting start.sh script"
 
 # Trading Bot Start Script
 # This script activates the virtual environment and starts the trading bot

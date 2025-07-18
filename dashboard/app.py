@@ -56,20 +56,51 @@ def status() -> WerkzeugResponse:
     return jsonify({"status": "stopped"})
 
 
+def stream_logs():
+    """Stream the bot's logs."""
+    if bot_process and bot_process.stdout:
+        # Non-blocking read from stdout
+        for line in iter(bot_process.stdout.readline, ""):
+            yield line
+    else:
+        yield ""
+
+
 @app.route("/logs")
 def logs() -> WerkzeugResponse:
-    """Stream bot logs."""
+    """Stream the bot's logs."""
+    return Response(stream_logs(), mimetype="text/plain")
 
-    def generate():
-        if bot_process and bot_process.stdout:
-            # Non-blocking read from stdout
-            for line in iter(bot_process.stdout.readline, ""):
-                yield line
-        else:
-            yield ""
 
-    return Response(generate(), mimetype="text/plain")
+@app.route("/analytics")
+def analytics():
+    """Serve the analytics dashboard."""
+    return render_template("analytics.html")
+
+
+@app.route("/api/analytics")
+def api_analytics():
+    """Provide analytics data from a backtest."""
+    # This is a placeholder for running a backtest and generating analytics
+    # In a real application, you would run a backtest and return the results
+    return jsonify(
+        {
+            "summary": {
+                "total_return": "10.5%",
+                "sharpe_ratio": "1.5",
+                "max_drawdown": "-5.2%",
+            },
+            "portfolio": {"total_trades": 123},
+            "equity_curve": [
+                ["2023-01-01", 100000],
+                ["2023-01-02", 101000],
+                ["2023-01-03", 100500],
+                ["2023-01-04", 102000],
+                ["2023-01-05", 103000],
+            ],
+        }
+    )
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    app.run(debug=True)

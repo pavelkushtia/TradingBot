@@ -5,33 +5,37 @@ from decimal import Decimal
 from typing import Any, Dict, Optional
 
 from ..core.config import Config
+from ..core.events import ApprovedSignalEvent, EventBus, SignalEvent
 from ..core.logging import TradingLogger
-from ..core.models import Portfolio, Position, StrategySignal
+from ..core.models import Portfolio, Position
+from ..core.signal import StrategySignal
 
 
 class RiskManager:
-    """Comprehensive risk management system."""
+    """Oversees risk management across all trading activities."""
 
-    def __init__(self, config: Config):
-        """Initialize risk manager."""
+    def __init__(self, config: Config, event_bus: EventBus):
+        """Initialize the RiskManager."""
         self.config = config
         self.logger = TradingLogger("risk_manager")
-
-        # Risk limits from config
+        self.event_bus = event_bus
+        self.max_drawdown = config.risk.max_drawdown
         self.max_position_size = config.trading.max_position_size
         self.max_daily_loss = config.risk.max_daily_loss
         self.max_open_positions = config.risk.max_open_positions
-        self.stop_loss_pct = config.trading.stop_loss_percentage
-        self.take_profit_pct = config.trading.take_profit_percentage
-
-        # Daily tracking
-        self.daily_pnl = Decimal("0")
-        self.daily_trades = 0
         self.last_reset_date = datetime.now(timezone.utc).date()
-
-        # Position tracking
-        self.position_sizes: Dict[str, Decimal] = {}
         self.rejected_signals_count = 0
+        self.daily_pnl = Decimal("0.0")
+
+    async def on_signal(self, event: SignalEvent) -> None:
+        """Handle new signal."""
+        # This is a placeholder for where the portfolio would be retrieved
+        portfolio = None
+        is_approved = await self.evaluate_signal(event, portfolio)
+        if is_approved:
+            await self.event_bus.publish(
+                "signal.approved", ApprovedSignalEvent(signal=event.signal)
+            )
 
     async def initialize(self) -> None:
         """Initialize risk manager."""
@@ -42,7 +46,7 @@ class RiskManager:
         self.logger.logger.info("Risk manager shutdown")
 
     async def evaluate_signal(
-        self, signal: StrategySignal, portfolio: Optional[Portfolio]
+        self, signal: StrategySignal, portfolio: Portfolio
     ) -> bool:
         """Evaluate if a signal passes risk management checks."""
         try:

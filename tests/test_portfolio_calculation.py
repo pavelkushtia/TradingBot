@@ -3,6 +3,7 @@
 import asyncio
 from datetime import datetime, timedelta
 from decimal import Decimal
+from unittest.mock import MagicMock
 
 from trading_bot.backtesting.engine import BacktestEngine
 from trading_bot.core.config import Config
@@ -84,9 +85,10 @@ async def test_portfolio_calculation_bug() -> tuple:
 
     # Create config
     config = Config()
+    event_bus = MagicMock()
 
     # Create backtest engine
-    engine = BacktestEngine(config)
+    engine = BacktestEngine(config, event_bus)
 
     # Create strategy
     strategy = MomentumCrossoverStrategy(
@@ -126,7 +128,7 @@ async def test_portfolio_calculation_bug() -> tuple:
     print("-" * 40)
 
     # Reset engine for second test
-    engine = BacktestEngine(config)
+    engine = BacktestEngine(config, event_bus)
     strategy = MomentumCrossoverStrategy(
         "momentum_crossover",
         {"short_window": 10, "long_window": 30, "min_strength_threshold": 0.01},

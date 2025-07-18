@@ -5,7 +5,7 @@ import os
 from typing import Any, Dict
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, Field, validator
 
 # Load environment variables
 load_dotenv()
@@ -13,8 +13,6 @@ load_dotenv()
 
 class ExchangeConfig(BaseModel):
     """Exchange configuration."""
-
-    model_config = ConfigDict()
 
     name: str = Field(default="alpaca")
     api_key: str = Field(default="")
@@ -26,40 +24,30 @@ class ExchangeConfig(BaseModel):
 class TradingConfig(BaseModel):
     """Trading configuration."""
 
-    model_config = ConfigDict()
-
     portfolio_value: float = Field(default=100000.0, gt=0)
     max_position_size: float = Field(default=0.05, gt=0, le=1.0)
     stop_loss_percentage: float = Field(default=0.02, gt=0, le=1.0)
     take_profit_percentage: float = Field(default=0.04, gt=0, le=1.0)
-    trading_symbols: str = Field(
-        default="AAPL,GOOGL,MSFT",
-        description="Comma-separated list of symbols to trade",
-    )
+    paper_trading: bool = Field(default=True)
 
 
 class RiskConfig(BaseModel):
     """Risk management configuration."""
 
-    model_config = ConfigDict()
-
-    max_daily_loss: float = Field(default=0.02, gt=0, le=1.0)
-    max_open_positions: int = Field(default=10, gt=0)
-    risk_free_rate: float = Field(default=0.02, ge=0)
+    max_drawdown: float = 0.15
+    max_daily_loss: float = 0.05
+    max_open_positions: int = 10
+    risk_free_rate: float = 0.02
 
 
 class DatabaseConfig(BaseModel):
     """Database configuration."""
-
-    model_config = ConfigDict()
 
     url: str = Field(default="sqlite+aiosqlite:///trading_bot.db")
 
 
 class LoggingConfig(BaseModel):
     """Logging configuration."""
-
-    model_config = ConfigDict()
 
     level: str = Field(default="INFO")
     format: str = Field(default="json")
@@ -68,8 +56,6 @@ class LoggingConfig(BaseModel):
 class MonitoringConfig(BaseModel):
     """Monitoring configuration."""
 
-    model_config = ConfigDict()
-
     enable_prometheus: bool = Field(default=False)
     prometheus_port: int = Field(default=8000, gt=0, le=65535)
 
@@ -77,42 +63,34 @@ class MonitoringConfig(BaseModel):
 class StrategyConfig(BaseModel):
     """Strategy configuration."""
 
-    model_config = ConfigDict()
-
     default_strategy: str = Field(default="momentum_crossover")
+    symbols: list[str] = Field(default_factory=list)
     parameters: Dict[str, Any] = Field(default_factory=dict)
 
-    @field_validator("parameters", mode="before")
-    @classmethod
+    @validator("parameters", pre=True)
     def parse_parameters(cls, v: Any) -> Dict[str, Any]:
         if isinstance(v, str):
             try:
-                parsed = json.loads(v)
-                return parsed if isinstance(parsed, dict) else {}
+                return json.loads(v)
             except json.JSONDecodeError:
                 return {}
-        return v if isinstance(v, dict) else {}
+        return v
 
 
 class MarketDataConfig(BaseModel):
     """Market data configuration."""
 
-    model_config = ConfigDict()
-
     provider: str = Field(default="alpaca")
     websocket_reconnect_delay: int = Field(default=5, gt=0)
     max_reconnect_attempts: int = Field(default=10, gt=0)
     websocket_url: str = Field(default="wss://stream.data.alpaca.markets/v2/iex")
-    websocket_timeout: int = Field(default=30, gt=0)
-    websocket_ping_interval: int = Field(default=20, gt=0)
-    websocket_ping_timeout: int = Field(default=10, gt=0)
     data_api_url: str = Field(default="https://data.alpaca.markets/v2")
+    websocket_ping_interval: int = Field(default=20)
+    websocket_ping_timeout: int = Field(default=10)
 
 
 class Config(BaseModel):
     """Main configuration class."""
-
-    model_config = ConfigDict()
 
     exchange: ExchangeConfig = Field(default_factory=ExchangeConfig)
     trading: TradingConfig = Field(default_factory=TradingConfig)
@@ -126,7 +104,7 @@ class Config(BaseModel):
     @classmethod
     def from_env(cls) -> "Config":
         """Create configuration from environment variables."""
-
+        load_dotenv()
         exchange_config = ExchangeConfig(
             name=os.getenv("EXCHANGE", "alpaca"),
             api_key=os.getenv("ALPACA_API_KEY", ""),
@@ -140,7 +118,6 @@ class Config(BaseModel):
             max_position_size=float(os.getenv("MAX_POSITION_SIZE", 0.05)),
             stop_loss_percentage=float(os.getenv("STOP_LOSS_PERCENTAGE", 0.02)),
             take_profit_percentage=float(os.getenv("TAKE_PROFIT_PERCENTAGE", 0.04)),
-            trading_symbols=os.getenv("TRADING_SYMBOLS", "AAPL,GOOGL,MSFT"),
         )
 
         risk_config = RiskConfig(
@@ -162,20 +139,12 @@ class Config(BaseModel):
             prometheus_port=int(os.getenv("PROMETHEUS_PORT", 8000)),
         )
 
-        # Parse strategy parameters from JSON string
-        strategy_params_str = os.getenv(
-            "STRATEGY_PARAMETERS", '{"short_window": 10, "long_window": 30}'
-        )
-        try:
-            strategy_params = json.loads(strategy_params_str)
-            if not isinstance(strategy_params, dict):
-                strategy_params = {}
-        except json.JSONDecodeError:
-            strategy_params = {}
-
         strategy_config = StrategyConfig(
             default_strategy=os.getenv("DEFAULT_STRATEGY", "momentum_crossover"),
-            parameters=strategy_params,
+            symbols=os.getenv("SYMBOLS", "AAPL,GOOGL,MSFT").split(","),
+            parameters=os.getenv(
+                "STRATEGY_PARAMETERS", '{"short_window": 10, "long_window": 30}'
+            ),
         )
 
         market_data_config = MarketDataConfig(
@@ -185,12 +154,11 @@ class Config(BaseModel):
             websocket_url=os.getenv(
                 "ALPACA_WEBSOCKET_URL", "wss://stream.data.alpaca.markets/v2/iex"
             ),
-            websocket_timeout=int(os.getenv("WEBSOCKET_TIMEOUT", 30)),
+            data_api_url=os.getenv(
+                "ALPACA_DATA_API_URL", "https://data.alpaca.markets/v2"
+            ),
             websocket_ping_interval=int(os.getenv("WEBSOCKET_PING_INTERVAL", 20)),
             websocket_ping_timeout=int(os.getenv("WEBSOCKET_PING_TIMEOUT", 10)),
-            data_api_url=os.getenv(
-                "ALPACA_MARKET_DATA_URL", "https://data.alpaca.markets/v2"
-            ),
         )
 
         return cls(

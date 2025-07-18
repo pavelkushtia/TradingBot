@@ -7,6 +7,7 @@ from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from ..core.config import Config
+from ..core.events import EventBus, OrderEvent, SignalEvent
 from ..core.exceptions import OrderExecutionError
 from ..core.logging import TradingLogger
 from ..core.models import Order, OrderSide, OrderStatus, OrderType, Trade
@@ -16,9 +17,10 @@ from ..core.shared_execution import SharedExecutionLogic
 class ExecutionManager:
     """High-performance order execution manager."""
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, event_bus: EventBus):
         """Initialize execution manager."""
         self.config = config
+        self.event_bus = event_bus
         self.logger = TradingLogger("execution_manager")
 
         # Initialize shared execution logic (same as backtesting)
@@ -34,19 +36,25 @@ class ExecutionManager:
         self.orders_cancelled = 0
         self.total_volume = Decimal("0")
 
-        # Mock execution for simulation
-        self.mock_mode = config.exchange.environment == "sandbox"
-        self.mock_fill_delay = 0.1  # seconds
+        # Paper trading mode
+        self.paper_trading_mode = config.trading.paper_trading
+        self.paper_trading_fill_delay = 0.1  # seconds
 
         # Order synchronization lock to prevent race conditions
         self._order_lock = asyncio.Lock()
+
+    async def on_signal(self, event: SignalEvent) -> None:
+        """Handle new signal."""
+        order = await self._signal_to_order(event.signal)
+        if order:
+            await self.submit_order(order)
 
     async def initialize(self) -> None:
         """Initialize execution manager."""
         self.logger.logger.info("Execution manager initialized")
 
-        if self.mock_mode:
-            self.logger.logger.info("Running in mock execution mode")
+        if self.paper_trading_mode:
+            self.logger.logger.info("Running in paper trading mode")
 
     async def shutdown(self) -> None:
         """Shutdown execution manager."""
@@ -82,13 +90,14 @@ class ExecutionManager:
 
             self.logger.log_order(order.dict(), "submitted")
 
-            if self.mock_mode:
-                # Schedule mock execution
-                asyncio.create_task(self._mock_execute_order(order))
+            if self.paper_trading_mode:
+                # Schedule paper trading execution
+                asyncio.create_task(self._paper_execute_order(order))
             else:
                 # Submit to real exchange
                 await self._submit_to_exchange(order)
 
+            await self.event_bus.publish("order", OrderEvent(order))
             return order
 
         except Exception as e:
@@ -110,9 +119,9 @@ class ExecutionManager:
 
                 order = self.pending_orders[order_id]
 
-                if self.mock_mode:
-                    # Mock cancellation
-                    await self._mock_cancel_order(order)
+                if self.paper_trading_mode:
+                    # Paper trading cancellation
+                    await self._paper_cancel_order(order)
                 else:
                     # Cancel on real exchange
                     await self._cancel_on_exchange(order)
@@ -128,6 +137,7 @@ class ExecutionManager:
                 self.orders_cancelled += 1
                 self.logger.log_order(order.dict(), "cancelled")
 
+                await self.event_bus.publish("order_updated", OrderEvent(order))
                 return True
 
         except Exception as e:
@@ -157,6 +167,24 @@ class ExecutionManager:
         # In a real implementation, this would query the exchange or database
         return []
 
+    async def _signal_to_order(self, signal: Any) -> Optional[Order]:
+        """Convert a signal to an order."""
+        # This is a placeholder. A more sophisticated implementation would
+        # consider position sizing, risk, etc.
+        if signal.signal_type == "buy":
+            side = OrderSide.BUY
+        elif signal.signal_type == "sell":
+            side = OrderSide.SELL
+        else:
+            return None
+
+        return Order(
+            symbol=signal.symbol,
+            quantity=Decimal("100"),  # Placeholder quantity
+            side=side,
+            type=OrderType.MARKET,
+        )
+
     async def _validate_order(self, order: Order) -> bool:
         """Validate order parameters."""
         # Basic validation
@@ -185,10 +213,10 @@ class ExecutionManager:
     async def _submit_to_exchange(self, order: Order) -> None:
         """Submit order to real exchange (Alpaca implementation)."""
 
-        # If in mock mode, skip real exchange submission
-        if self.mock_mode:
+        # If in paper trading mode, skip real exchange submission
+        if self.paper_trading_mode:
             self.logger.logger.info(
-                f"Mock mode: Skipping real exchange submission for order {order.id}"
+                f"Paper trading mode: Skipping real exchange submission for order {order.id}"
             )
             return
 
@@ -220,6 +248,8 @@ class ExecutionManager:
                     if response.status in [200, 201]:
                         result = await response.json()
                         order.id = result["id"]
+                        order.status = OrderStatus.ACCEPTED
+                        order.updated_at = datetime.now(timezone.utc)
                         self.logger.logger.info(
                             f"Order submitted successfully: {order.id}"
                         )
@@ -235,17 +265,15 @@ class ExecutionManager:
             raise OrderExecutionError(f"Order submission failed: {e}")
 
     async def _cancel_on_exchange(self, order: Order) -> None:
-        """Cancel order on real exchange."""
+        """Cancel order on real exchange (Alpaca implementation)."""
 
-        # If in mock mode, skip real exchange cancellation
-        if self.mock_mode:
+        if self.paper_trading_mode:
             self.logger.logger.info(
-                f"Mock mode: Skipping real exchange cancellation for order {order.id}"
+                f"Paper trading mode: Skipping real exchange cancellation for order {order.id}"
             )
             return
 
         self.logger.logger.info(f"Cancelling order on exchange: {order.id}")
-
         try:
             import aiohttp
 
@@ -258,7 +286,7 @@ class ExecutionManager:
                 async with session.delete(url, headers=headers) as response:
                     if response.status == 204:
                         self.logger.logger.info(
-                            f"Order cancelled successfully: {order.id}"
+                            f"Order {order.id} cancelled successfully"
                         )
                     else:
                         error_text = await response.text()
@@ -271,143 +299,102 @@ class ExecutionManager:
             )
             raise OrderExecutionError(f"Order cancellation failed: {e}")
 
-    async def _mock_execute_order(self, order: Order) -> None:
-        """Mock order execution for simulation."""
-        try:
-            # Simulate execution delay
-            await asyncio.sleep(self.mock_fill_delay)
+    async def _paper_execute_order(self, order: Order) -> None:
+        """Simulate order execution for paper trading."""
+        await asyncio.sleep(self.paper_trading_fill_delay)
 
-            # Atomic check and process under lock
-            async with self._order_lock:
-                # Double-check order still exists and is pending
-                if order.id not in self.pending_orders:
-                    self.logger.logger.info(
-                        f"Order {order.id} was cancelled before execution"
-                    )
-                    return
+        # Simulate fill or rejection
+        if self._should_fill():
+            await self._paper_fill_order(order)
+        else:
+            await self._paper_reject_order(order, "Market closed")
 
-                # Simulate different execution scenarios
-                import random
+    async def _paper_fill_order(self, order: Order) -> None:
+        """Simulate filling an order for paper trading."""
+        async with self._order_lock:
+            if order.id in self.pending_orders:
+                market_price = self._get_mock_market_price(order.symbol)
 
-                # 95% fill rate for market orders, 80% for limit orders
-                fill_probability = 0.95 if order.type == OrderType.MARKET else 0.80
+                # Update order
+                order.status = OrderStatus.FILLED
+                order.filled_quantity = order.quantity
+                order.filled_avg_price = market_price
+                order.updated_at = datetime.now(timezone.utc)
+                order.commission = self._calculate_commission(
+                    order.quantity, market_price
+                )
 
-                if random.random() < fill_probability:
-                    await self._mock_fill_order(order)
-                else:
-                    # Order remains pending or gets cancelled
-                    if order.type == OrderType.LIMIT:
-                        # Limit orders can stay pending
-                        self.logger.logger.info(
-                            f"Limit order {order.id} remains pending"
-                        )
-                    else:
-                        # Market orders that don't fill get rejected
-                        await self._mock_reject_order(order, "Insufficient liquidity")
-
-        except Exception as e:
-            self.logger.log_error(
-                e, {"context": "mock_execution", "order_id": order.id}
-            )
-
-    async def _mock_fill_order(self, order: Order) -> None:
-        """Mock order fill. Assumes we're already under self._order_lock."""
-        try:
-            # Simulate realistic fill price
-            fill_price = (
-                order.price
-                if order.price
-                else self._get_mock_market_price(order.symbol)
-            )
-
-            # Add some slippage for market orders
-            if order.type == OrderType.MARKET:
-                slippage_factor = Decimal("0.001")  # 0.1% slippage
-                if order.side == OrderSide.BUY:
-                    fill_price *= 1 + slippage_factor
-                else:
-                    fill_price *= 1 - slippage_factor
-
-            # Create trade
-            trade = self.shared_execution.create_trade_from_order(order, fill_price)
-
-            # Update order
-            order.status = OrderStatus.FILLED
-            order.filled_quantity = order.quantity
-            order.average_fill_price = fill_price
-            order.updated_at = datetime.now(timezone.utc)
-
-            # Atomic state transition - double check order still exists
-            if order.id and order.id in self.pending_orders:
+                # Move to completed
                 self.completed_orders[order.id] = order
                 del self.pending_orders[order.id]
 
-                # Update statistics
                 self.orders_filled += 1
-                self.total_volume += order.quantity * fill_price
-
+                self.total_volume += order.quantity * market_price
                 self.logger.log_order(order.dict(), "filled")
-                self.logger.log_trade(trade.dict())
 
-        except Exception as e:
-            self.logger.log_error(e, {"context": "mock_fill", "order_id": order.id})
+                # Create and publish trade
+                trade = Trade(
+                    id=str(uuid.uuid4()),
+                    order_id=order.id,
+                    symbol=order.symbol,
+                    quantity=order.quantity,
+                    price=market_price,
+                    side=order.side,
+                    commission=order.commission,
+                    timestamp=order.updated_at,
+                )
+                await self.event_bus.publish("trade", OrderEvent(order=order))
 
-    async def _mock_reject_order(self, order: Order, reason: str) -> None:
-        """Mock order rejection. Assumes we're already under self._order_lock."""
-        order.status = OrderStatus.REJECTED
-        order.updated_at = datetime.now(timezone.utc)
-        order.metadata["rejection_reason"] = reason
+    async def _paper_reject_order(self, order: Order, reason: str) -> None:
+        """Simulate rejecting an order for paper trading."""
+        async with self._order_lock:
+            if order.id in self.pending_orders:
+                order.status = OrderStatus.REJECTED
+                order.updated_at = datetime.now(timezone.utc)
+                self.completed_orders[order.id] = order
+                del self.pending_orders[order.id]
+                self.logger.log_order(order.dict(), "rejected", {"reason": reason})
 
-        # Atomic state transition - double check order still exists
-        if order.id and order.id in self.pending_orders:
-            self.completed_orders[order.id] = order
-            del self.pending_orders[order.id]
+    async def _paper_cancel_order(self, order: Order) -> None:
+        """Simulate cancelling an order for paper trading."""
+        self.logger.logger.info(
+            f"Paper trading: Simulating cancellation for order {order.id}"
+        )
+        # No external state to change, just log and update status
+        pass
 
-            self.logger.log_order(order.dict(), "rejected")
-
-    async def _mock_cancel_order(self, order: Order) -> None:
-        """Mock order cancellation."""
-        # Just log the cancellation - actual status update happens in cancel_order
-        self.logger.logger.info(f"Mock cancelling order: {order.id}")
-
-    def _get_mock_market_price(self, symbol: str) -> Decimal:
-        """Get mock market price for a symbol."""
-        # Simple mock price generation
+    def _should_fill(self) -> bool:
+        """Randomly decide if a paper order should be filled."""
+        # Simple logic: 95% chance of fill
         import random
 
-        base_prices = {
-            "AAPL": 150.0,
-            "GOOGL": 2500.0,
-            "MSFT": 300.0,
-            "TSLA": 800.0,
-            "SPY": 400.0,
-        }
+        return random.random() < 0.95
 
-        base_price = base_prices.get(symbol, 100.0)
-        # Add some random variation
-        variation = random.uniform(-0.02, 0.02)  # ±2%
-        mock_price = base_price * (1 + variation)
+    def _get_mock_market_price(self, symbol: str) -> Decimal:
+        """Get a mock market price for a symbol."""
+        # In a real paper trading system, this would fetch the current
+        # market price from a data provider.
+        # For this simulation, we'll use a random price around a baseline.
+        import random
 
-        return Decimal(str(round(mock_price, 2)))
+        if symbol == "AAPL":
+            return Decimal(str(random.uniform(150.0, 155.0)))
+        elif symbol == "GOOGL":
+            return Decimal(str(random.uniform(2800.0, 2850.0)))
+        else:
+            return Decimal(str(random.uniform(100.0, 105.0)))
 
     def _calculate_commission(self, quantity: Decimal, price: Decimal) -> Decimal:
-        """Calculate commission for a trade (using shared execution logic)."""
+        """Calculate commission for a trade."""
         return self.shared_execution.calculate_commission(quantity, price)
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get execution statistics."""
-        fill_rate = (
-            (self.orders_filled / self.orders_submitted)
-            if self.orders_submitted > 0
-            else 0
-        )
-
+        """Get execution manager statistics."""
         return {
             "orders_submitted": self.orders_submitted,
             "orders_filled": self.orders_filled,
             "orders_cancelled": self.orders_cancelled,
-            "fill_rate": fill_rate,
             "total_volume": str(self.total_volume),
             "pending_orders": len(self.pending_orders),
-            "mock_mode": self.mock_mode,
+            "paper_trading_mode": self.paper_trading_mode,
         }

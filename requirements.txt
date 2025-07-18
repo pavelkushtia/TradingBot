@@ -21,7 +21,10 @@ prometheus-client>=0.18.0
 psutil>=5.9.0
 
 # Configuration & Utils
-pydantic>=2.0.0
+# Use `pydantic<2` for now, until the rest of the ecosystem catches up
+pydantic>=1.10.0,<2.0.0
+python-decouple>=3.0.0
+loguru>=0.7.2
 python-dotenv>=1.0.1
 click>=8.0.0
 rich>=13.0.0
@@ -55,3 +58,7 @@ yfinance>=0.2.0
 # Alpaca
 alpaca-trade-api==3.2.0
 python-dotenv>=1.0.1
+
+# Interactive Brokers
+ib-insync>=0.9.80
+websockets==10.4

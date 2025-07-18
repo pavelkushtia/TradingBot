@@ -10,6 +10,7 @@ import aiohttp
 import websockets
 
 from ..core.config import Config
+from ..core.events import EventBus, MarketDataEvent
 from ..core.exceptions import MarketDataError
 from ..core.logging import TradingLogger
 from ..core.models import MarketData, Quote
@@ -18,9 +19,10 @@ from ..core.models import MarketData, Quote
 class MarketDataManager:
     """High-performance market data manager with real-time feeds."""
 
-    def __init__(self, config: Config):
+    def __init__(self, config: Config, event_bus: EventBus):
         """Initialize market data manager."""
         self.config = config
+        self.event_bus = event_bus
         self.logger = TradingLogger("market_data")
 
         # Connection state
@@ -213,15 +215,28 @@ class MarketDataManager:
 
     def register_quote_callback(self, callback: Callable[[Quote], None]) -> None:
         """Register callback for real-time quotes."""
+        self.logger.logger.warning(
+            "register_quote_callback is deprecated, use event_bus.subscribe('market_data') instead"
+        )
         self.quote_callbacks.append(callback)
 
     def register_bar_callback(self, callback: Callable[[MarketData], None]) -> None:
         """Register callback for real-time bars."""
+        self.logger.logger.warning(
+            "register_bar_callback is deprecated, use event_bus.subscribe('market_data') instead"
+        )
         self.bar_callbacks.append(callback)
 
     async def _connect_websocket(self) -> None:
         """Connect to WebSocket market data feed."""
         try:
+            # Validate API keys before connecting
+            if not self.config.exchange.api_key or not self.config.exchange.secret_key:
+                raise MarketDataError(
+                    "API key and/or secret key are not configured. "
+                    "Please set ALPACA_API_KEY and ALPACA_SECRET_KEY environment variables."
+                )
+
             # Use WebSocket URL from configuration
             ws_url = self.config.market_data.websocket_url
 
@@ -237,15 +252,16 @@ class MarketDataManager:
             self.reconnect_attempts = 0
 
             # Authenticate
-            auth_message = {
-                "action": "auth",
-                "key": self.config.exchange.api_key,
-                "secret": self.config.exchange.secret_key,
-            }
-            await self.websocket.send(json.dumps(auth_message))
+            if self.websocket:
+                auth_message = {
+                    "action": "auth",
+                    "key": self.config.exchange.api_key,
+                    "secret": self.config.exchange.secret_key,
+                }
+                await self.websocket.send(json.dumps(auth_message))
 
-            # Start message handling immediately
-            asyncio.create_task(self._handle_websocket_messages())
+                # Start message handling immediately
+                asyncio.create_task(self._handle_websocket_messages())
 
             self.logger.logger.info("WebSocket connected and authentication sent")
 
@@ -256,29 +272,19 @@ class MarketDataManager:
 
     async def _handle_websocket_messages(self) -> None:
         """Handle incoming WebSocket messages."""
+        if not self.websocket:
+            return
         try:
-            while self.connected and self.websocket:
-                try:
-                    message = await asyncio.wait_for(
-                        self.websocket.recv(),
-                        timeout=self.config.market_data.websocket_timeout,
-                    )
-                    await self._process_message(message)
+            async for message in self.websocket:
+                self.message_count += 1
+                self.last_message_time = datetime.now(timezone.utc)
+                await self._process_message(message)
 
-                except asyncio.TimeoutError:
-                    # Send ping to keep connection alive
-                    if self.websocket:
-                        await self.websocket.ping()
-
-                except websockets.exceptions.ConnectionClosed:
-                    self.logger.logger.warning("WebSocket connection closed")
-                    self.connected = False
-                    await self._handle_reconnection(Exception("Connection closed"))
-                    break
-
+        except websockets.exceptions.ConnectionClosed as e:
+            self.logger.logger.warning(f"WebSocket connection closed: {e}")
+            await self._handle_reconnection(e)
         except Exception as e:
-            self.logger.log_error(e, {"context": "websocket_message_handling"})
-            self.connected = False
+            self.logger.log_error(e, {"context": "websocket_handling"})
             await self._handle_reconnection(e)
 
     async def _process_message(self, message: str) -> None:
@@ -293,9 +299,6 @@ class MarketDataManager:
             else:
                 await self._process_data_item(data)
 
-            self.message_count += 1
-            self.last_message_time = datetime.now(timezone.utc)
-
         except Exception as e:
             self.logger.log_error(
                 e, {"context": "message_processing", "message": message[:100]}
@@ -304,6 +307,7 @@ class MarketDataManager:
     async def _process_data_item(self, item: Dict[str, Any]) -> None:
         """Process individual data item."""
         msg_type = item.get("T")
+        self.logger.logger.debug(f"Processing message type: {msg_type}, data: {item}")
 
         if msg_type == "q":  # Quote
             await self._handle_quote(item)
@@ -315,68 +319,72 @@ class MarketDataManager:
             await self._handle_status_message(item)
 
     async def _handle_quote(self, data: Dict[str, Any]) -> None:
-        """Handle quote message."""
-        try:
-            quote = Quote(
-                symbol=data["S"],
-                timestamp=datetime.fromisoformat(data["t"].replace("Z", "+00:00")),
-                bid_price=Decimal(str(data["bp"])),
-                ask_price=Decimal(str(data["ap"])),
-                bid_size=data["bs"],
-                ask_size=data["as"],
-            )
+        """Handle incoming quote data."""
+        timestamp_str = data["t"]
+        if "." in timestamp_str:
+            parts = timestamp_str.split(".")
+            parts[1] = parts[1][:6]
+            timestamp_str = ".".join(parts)
+        quote = Quote(
+            symbol=data["S"],
+            bid_price=Decimal(str(data["bp"])),
+            bid_size=int(data["bs"]),
+            ask_price=Decimal(str(data["ap"])),
+            ask_size=int(data["as"]),
+            timestamp=datetime.fromisoformat(timestamp_str.replace("Z", "+00:00")),
+        )
+        self.latest_quotes[quote.symbol] = quote
 
-            self.latest_quotes[quote.symbol] = quote
-            self.latest_prices[quote.symbol] = quote.mid_price
+        # Convert quote to a MarketData-like object for the event
+        market_data = MarketData(
+            symbol=quote.symbol,
+            timestamp=quote.timestamp,
+            open=quote.mid_price,
+            high=quote.mid_price,
+            low=quote.mid_price,
+            close=quote.mid_price,
+            volume=0,  # Quotes don't have volume
+        )
+        await self.event_bus.publish("market_data", MarketDataEvent(market_data))
 
-            # Notify callbacks
-            for callback in self.quote_callbacks:
-                try:
-                    callback(quote)
-                except Exception as e:
-                    self.logger.log_error(e, {"context": "quote_callback"})
-
-        except Exception as e:
-            self.logger.log_error(e, {"context": "quote_processing", "data": data})
+        # Legacy callbacks
+        for callback in self.quote_callbacks:
+            try:
+                callback(quote)
+            except Exception as e:
+                self.logger.log_error(e, {"context": "quote_callback"})
 
     async def _handle_trade(self, data: Dict[str, Any]) -> None:
-        """Handle trade message."""
-        try:
-            symbol = data["S"]
-            price = Decimal(str(data["p"]))
-
-            # Update latest price
-            self.latest_prices[symbol] = price
-
-        except Exception as e:
-            self.logger.log_error(e, {"context": "trade_processing", "data": data})
+        """Handle incoming trade data."""
+        price = Decimal(str(data["p"]))
+        self.latest_prices[data["S"]] = price
 
     async def _handle_bar(self, data: Dict[str, Any]) -> None:
-        """Handle bar message."""
-        try:
-            bar = MarketData(
-                symbol=data["S"],
-                timestamp=datetime.fromisoformat(data["t"].replace("Z", "+00:00")),
-                open=Decimal(str(data["o"])),
-                high=Decimal(str(data["h"])),
-                low=Decimal(str(data["l"])),
-                close=Decimal(str(data["c"])),
-                volume=data["v"],
-                vwap=Decimal(str(data.get("vw", data["c"]))),
-            )
+        """Handle incoming bar data."""
+        timestamp_str = data["t"]
+        if "." in timestamp_str:
+            parts = timestamp_str.split(".")
+            parts[1] = parts[1][:6]
+            timestamp_str = ".".join(parts)
+        bar = MarketData(
+            symbol=data["S"],
+            timestamp=datetime.fromisoformat(timestamp_str.replace("Z", "+00:00")),
+            open=Decimal(str(data["o"])),
+            high=Decimal(str(data["h"])),
+            low=Decimal(str(data["l"])),
+            close=Decimal(str(data["c"])),
+            volume=int(data["v"]),
+        )
 
-            # Update latest price
-            self.latest_prices[bar.symbol] = bar.close
+        # Publish event
+        await self.event_bus.publish("market_data", MarketDataEvent(bar))
 
-            # Notify callbacks
-            for callback in self.bar_callbacks:
-                try:
-                    callback(bar)
-                except Exception as e:
-                    self.logger.log_error(e, {"context": "bar_callback"})
-
-        except Exception as e:
-            self.logger.log_error(e, {"context": "bar_processing", "data": data})
+        # Legacy callbacks are deprecated in favor of events
+        # for callback in self.bar_callbacks:
+        #     try:
+        #         callback(bar)
+        #     except Exception as e:
+        #         self.logger.log_error(e, {"context": "bar_callback"})
 
     async def _handle_status_message(self, data: Dict[str, Any]) -> None:
         """Handle status messages."""
@@ -511,10 +519,15 @@ class MarketDataManager:
 
         if "bars" in data:
             for bar_data in data["bars"]:
+                timestamp_str = bar_data["t"]
+                if "." in timestamp_str:
+                    parts = timestamp_str.split(".")
+                    parts[1] = parts[1][:6]
+                    timestamp_str = ".".join(parts)
                 bar = MarketData(
                     symbol=symbol,
                     timestamp=datetime.fromisoformat(
-                        bar_data["t"].replace("Z", "+00:00")
+                        timestamp_str.replace("Z", "+00:00")
                     ),
                     open=Decimal(str(bar_data["o"])),
                     high=Decimal(str(bar_data["h"])),

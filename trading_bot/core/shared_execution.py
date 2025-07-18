@@ -2,10 +2,11 @@
 
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Optional
+from typing import Dict, List, Optional, Tuple
 from uuid import uuid4
 
-from .models import Order, OrderSide, OrderType, StrategySignal, Trade
+from .models import Order, OrderSide, OrderType, Trade
+from .signal import StrategySignal
 
 
 class SharedExecutionLogic:
