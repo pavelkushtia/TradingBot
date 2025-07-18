@@ -37,6 +37,9 @@ class ExecutionManager:
         # Mock execution for simulation
         self.mock_mode = config.exchange.environment == "sandbox"
         self.mock_fill_delay = 0.1  # seconds
+        
+        # Order synchronization lock to prevent race conditions
+        self._order_lock = asyncio.Lock()
 
     async def initialize(self) -> None:
         """Initialize execution manager."""
@@ -98,33 +101,34 @@ class ExecutionManager:
     async def cancel_order(self, order_id: str) -> bool:
         """Cancel a pending order."""
         try:
-            if order_id not in self.pending_orders:
-                self.logger.logger.warning(
-                    f"Order {order_id} not found for cancellation"
-                )
-                return False
+            async with self._order_lock:
+                if order_id not in self.pending_orders:
+                    self.logger.logger.warning(
+                        f"Order {order_id} not found for cancellation"
+                    )
+                    return False
 
-            order = self.pending_orders[order_id]
+                order = self.pending_orders[order_id]
 
-            if self.mock_mode:
-                # Mock cancellation
-                await self._mock_cancel_order(order)
-            else:
-                # Cancel on real exchange
-                await self._cancel_on_exchange(order)
+                if self.mock_mode:
+                    # Mock cancellation
+                    await self._mock_cancel_order(order)
+                else:
+                    # Cancel on real exchange
+                    await self._cancel_on_exchange(order)
 
-            # Update order status
-            order.status = OrderStatus.CANCELED
-            order.updated_at = datetime.now(timezone.utc)
+                # Update order status
+                order.status = OrderStatus.CANCELED
+                order.updated_at = datetime.now(timezone.utc)
 
-            # Move to completed orders
-            self.completed_orders[order_id] = order
-            del self.pending_orders[order_id]
+                # Move to completed orders
+                self.completed_orders[order_id] = order
+                del self.pending_orders[order_id]
 
-            self.orders_cancelled += 1
-            self.logger.log_order(order.dict(), "cancelled")
+                self.orders_cancelled += 1
+                self.logger.log_order(order.dict(), "cancelled")
 
-            return True
+                return True
 
         except Exception as e:
             self.logger.log_error(
@@ -273,26 +277,29 @@ class ExecutionManager:
             # Simulate execution delay
             await asyncio.sleep(self.mock_fill_delay)
 
-            # Check if order was cancelled
-            if order.id not in self.pending_orders:
-                return
+            # Atomic check and process under lock
+            async with self._order_lock:
+                # Double-check order still exists and is pending
+                if order.id not in self.pending_orders:
+                    self.logger.logger.info(f"Order {order.id} was cancelled before execution")
+                    return
 
-            # Simulate different execution scenarios
-            import random
+                # Simulate different execution scenarios
+                import random
 
-            # 95% fill rate for market orders, 80% for limit orders
-            fill_probability = 0.95 if order.type == OrderType.MARKET else 0.80
+                # 95% fill rate for market orders, 80% for limit orders
+                fill_probability = 0.95 if order.type == OrderType.MARKET else 0.80
 
-            if random.random() < fill_probability:
-                await self._mock_fill_order(order)
-            else:
-                # Order remains pending or gets cancelled
-                if order.type == OrderType.LIMIT:
-                    # Limit orders can stay pending
-                    self.logger.logger.info(f"Limit order {order.id} remains pending")
+                if random.random() < fill_probability:
+                    await self._mock_fill_order(order)
                 else:
-                    # Market orders that don't fill get rejected
-                    await self._mock_reject_order(order, "Insufficient liquidity")
+                    # Order remains pending or gets cancelled
+                    if order.type == OrderType.LIMIT:
+                        # Limit orders can stay pending
+                        self.logger.logger.info(f"Limit order {order.id} remains pending")
+                    else:
+                        # Market orders that don't fill get rejected
+                        await self._mock_reject_order(order, "Insufficient liquidity")
 
         except Exception as e:
             self.logger.log_error(
@@ -300,7 +307,7 @@ class ExecutionManager:
             )
 
     async def _mock_fill_order(self, order: Order) -> None:
-        """Mock order fill."""
+        """Mock order fill. Assumes we're already under self._order_lock."""
         try:
             # Simulate realistic fill price
             fill_price = (
@@ -326,33 +333,33 @@ class ExecutionManager:
             order.average_fill_price = fill_price
             order.updated_at = datetime.now(timezone.utc)
 
-            # Move to completed orders
-            if order.id:
+            # Atomic state transition - double check order still exists
+            if order.id and order.id in self.pending_orders:
                 self.completed_orders[order.id] = order
                 del self.pending_orders[order.id]
 
-            # Update statistics
-            self.orders_filled += 1
-            self.total_volume += order.quantity * fill_price
+                # Update statistics
+                self.orders_filled += 1
+                self.total_volume += order.quantity * fill_price
 
-            self.logger.log_order(order.dict(), "filled")
-            self.logger.log_trade(trade.dict())
+                self.logger.log_order(order.dict(), "filled")
+                self.logger.log_trade(trade.dict())
 
         except Exception as e:
             self.logger.log_error(e, {"context": "mock_fill", "order_id": order.id})
 
     async def _mock_reject_order(self, order: Order, reason: str) -> None:
-        """Mock order rejection."""
+        """Mock order rejection. Assumes we're already under self._order_lock."""
         order.status = OrderStatus.REJECTED
         order.updated_at = datetime.now(timezone.utc)
         order.metadata["rejection_reason"] = reason
 
-        # Move to completed orders
-        if order.id:
+        # Atomic state transition - double check order still exists
+        if order.id and order.id in self.pending_orders:
             self.completed_orders[order.id] = order
             del self.pending_orders[order.id]
 
-        self.logger.log_order(order.dict(), "rejected")
+            self.logger.log_order(order.dict(), "rejected")
 
     async def _mock_cancel_order(self, order: Order) -> None:
         """Mock order cancellation."""
