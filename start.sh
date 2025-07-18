@@ -27,18 +27,26 @@ if [ $# -eq 0 ]; then
     echo "  config         Show configuration"
     echo "  test           Run tests"
     echo "  help           Show detailed help"
+    echo "  web           Start the web dashboard"
     echo ""
     echo "Examples:"
     echo "  ./start.sh run --strategy momentum"
     echo "  ./start.sh backtest --strategy momentum_crossover --symbol AAPL --days 30"
-    echo '  ./start.sh run --symbols "AAPL,GOOGL,MSFT,TSLA,AMZN,NVDA,META,NFLX,AMD,INTC,CSCO,QCOM,PYPL,ADBE,CMCSA,PEP,COST,TMUS,AVGO,TXN,HON,UPS,LOW,SBUX,ISRG,GILD,BKNG,ADI,REGN,VRTX"'
+    echo '  ./start.sh run --symbols "AAPL,GOOGL,MSFT,TSLA,AMZN,NVDA,META,NFLX,AMD,INTC,CSCO,QCOM,PYPL,ADBE,CMCSA"'
     echo "  ./start.sh config"
     echo "  ./start.sh test"
+    echo "  ./start.sh web"
     echo ""
     echo "For detailed help: ./start.sh help"
     exit 0
 fi
 
 # Run the trading bot with provided arguments
+if [ "$1" == "web" ]; then
+    echo "🌐 Starting Web Dashboard..."
+    python dashboard/app.py
+    exit 0
+fi
+
 echo "🚀 Starting Trading Bot..."
 python3 main.py "$@"

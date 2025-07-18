@@ -236,7 +236,7 @@ class BollingerBands(TechnicalIndicator):
 
         middle = sum(recent_values) / len(recent_values)  # SMA
         variance = sum((x - middle) ** 2 for x in recent_values) / len(recent_values)
-        std = variance ** 0.5
+        std = variance**0.5
 
         upper = middle + (std * self.std_dev)
         lower = middle - (std * self.std_dev)
@@ -368,6 +368,117 @@ class Stochastic(TechnicalIndicator):
         return "STOCH"
 
 
+class WMA(TechnicalIndicator):
+    """Weighted Moving Average."""
+
+    def calculate(self) -> float:
+        """Calculate WMA."""
+        recent_values = list(self.values)[-self.period :]
+        weights = list(range(1, self.period + 1))
+        weighted_sum = sum(x * w for x, w in zip(recent_values, weights))
+        total_weight = sum(weights)
+        return weighted_sum / total_weight
+
+    def get_name(self) -> str:
+        """Get indicator name."""
+        return "WMA"
+
+
+class WilliamsR(TechnicalIndicator):
+    """Williams %R."""
+
+    def __init__(self, period_or_config=14):
+        super().__init__(period_or_config)
+        self.high_values = deque(maxlen=1000)
+        self.low_values = deque(maxlen=1000)
+        self.close_values = deque(maxlen=1000)
+
+    def update(self, bar_or_high, low=None, close=None) -> Optional[IndicatorResult]:
+        """Update Williams %R with new HLC values."""
+        if hasattr(bar_or_high, "high"):
+            high = float(bar_or_high.high)
+            low = float(bar_or_high.low)
+            close = float(bar_or_high.close)
+        else:
+            high = float(bar_or_high)
+            low = float(low) if low is not None else high
+            close = float(close) if close is not None else high
+
+        self.high_values.append(high)
+        self.low_values.append(low)
+        self.close_values.append(close)
+
+        if len(self.close_values) >= self.period:
+            self.ready = True
+            result_value = self.calculate()
+            if result_value is not None:
+                return IndicatorResult(self.get_name(), result_value)
+        return None
+
+    def calculate(self) -> float:
+        """Calculate Williams %R."""
+        recent_highs = list(self.high_values)[-self.period :]
+        recent_lows = list(self.low_values)[-self.period :]
+        current_close = self.close_values[-1]
+
+        highest_high = max(recent_highs)
+        lowest_low = min(recent_lows)
+
+        if highest_high == lowest_low:
+            return -50.0  # Mid-point if price is flat
+
+        williams_r = (
+            (highest_high - current_close) / (highest_high - lowest_low)
+        ) * -100
+        return williams_r
+
+    def get_name(self) -> str:
+        """Get indicator name."""
+        return "WILLR"
+
+
+class OBV(TechnicalIndicator):
+    """On-Balance Volume."""
+
+    def __init__(
+        self, period_or_config=None
+    ):  # Period is not used but kept for consistency
+        super().__init__(period_or_config=1)  # Needs at least one previous value
+        self.obv_value = 0
+        self.volumes = deque(maxlen=1000)
+
+    def update(self, bar_or_close, volume=None) -> Optional[IndicatorResult]:
+        """Update OBV with new close and volume."""
+        if hasattr(bar_or_close, "close"):
+            close = float(bar_or_close.close)
+            volume = float(bar_or_close.volume)
+        else:
+            close = float(bar_or_close)
+            if volume is None:
+                raise ValueError("Volume must be provided for OBV calculation")
+            volume = float(volume)
+
+        if len(self.values) > 0:
+            prev_close = self.values[-1]
+            if close > prev_close:
+                self.obv_value += volume
+            elif close < prev_close:
+                self.obv_value -= volume
+
+        self.values.append(close)
+        self.volumes.append(volume)
+        self.ready = True
+        return IndicatorResult(self.get_name(), self.obv_value)
+
+    def calculate(self) -> float:
+        """Return the current OBV value."""
+        return self.obv_value
+
+    def get_name(self) -> str:
+        """Get indicator name."""
+        return "OBV"
+
+
 class SimpleIndicatorManager:
     """Simple indicator manager that works with existing strategies."""
 
@@ -419,6 +530,14 @@ class SimpleIndicatorManager:
                 k_period = kwargs.get("k_period", 14)
                 d_period = kwargs.get("d_period", 3)
                 self.indicators[symbol][indicator_name] = Stochastic(k_period, d_period)
+            elif indicator_name == "WMA":
+                period = kwargs.get("period", 14)
+                self.indicators[symbol][indicator_name] = WMA(period)
+            elif indicator_name == "WILLR":
+                period = kwargs.get("period", 14)
+                self.indicators[symbol][indicator_name] = WilliamsR(period)
+            elif indicator_name == "OBV":
+                self.indicators[symbol][indicator_name] = OBV()
             else:
                 return False
 
@@ -445,7 +564,7 @@ class SimpleIndicatorManager:
 
         for name, indicator in self.indicators[symbol].items():
             try:
-                if name in ["SMA", "EMA", "RSI"]:
+                if name in ["SMA", "EMA", "RSI", "WMA"]:
                     result = indicator.update(close_price)
                 elif name == "MACD":
                     result = indicator.update(close_price)
@@ -455,6 +574,10 @@ class SimpleIndicatorManager:
                     result = indicator.update(bar, high_price, low_price)
                 elif name == "STOCH":
                     result = indicator.update(bar, high_price, low_price)
+                elif name == "WILLR":
+                    result = indicator.update(bar, high_price, low_price)
+                elif name == "OBV":
+                    result = indicator.update(bar)
                 else:
                     continue
 
@@ -479,7 +602,7 @@ class SimpleIndicatorManager:
 
         for name, indicator in self.indicators[symbol].items():
             try:
-                if name in ["SMA", "EMA", "RSI"]:
+                if name in ["SMA", "EMA", "RSI", "WMA"]:
                     result = indicator.update(close_price)
                 elif name == "MACD":
                     result = indicator.update(close_price)
@@ -489,6 +612,10 @@ class SimpleIndicatorManager:
                     result = indicator.update(bar, high_price, low_price)
                 elif name == "STOCH":
                     result = indicator.update(bar, high_price, low_price)
+                elif name == "WILLR":
+                    result = indicator.update(bar, high_price, low_price)
+                elif name == "OBV":
+                    result = indicator.update(bar)
                 else:
                     continue
 
@@ -619,4 +746,15 @@ class SimpleIndicatorManager:
 
     def get_available_indicators(self) -> List[str]:
         """Get list of available indicators."""
-        return ["SMA", "EMA", "RSI", "MACD", "BBANDS", "ATR", "STOCH"]
+        return [
+            "SMA",
+            "EMA",
+            "RSI",
+            "MACD",
+            "BBANDS",
+            "ATR",
+            "STOCH",
+            "WMA",
+            "WILLR",
+            "OBV",
+        ]

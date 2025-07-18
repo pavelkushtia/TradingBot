@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Bot Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 2em; background-color: #f4f4f9; }
+        .container { max-width: 800px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        h1 { color: #333; }
+        .controls button { padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin-right: 10px; }
+        #start-btn { background-color: #28a745; color: white; }
+        #stop-btn { background-color: #dc3545; color: white; }
+        .status { margin-top: 20px; font-size: 18px; }
+        #log-container { margin-top: 20px; background: #eee; padding: 15px; border-radius: 5px; height: 300px; overflow-y: scroll; white-space: pre-wrap; font-family: 'Courier New', Courier, monospace; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Trading Bot Control Panel</h1>
+        <div class="controls">
+            <button id="start-btn">Start Bot</button>
+            <button id="stop-btn">Stop Bot</button>
+        </div>
+        <div class="status">
+            <strong>Status:</strong> <span id="bot-status">Stopped</span>
+        </div>
+        <div id="log-container">
+            <p>Logs will appear here...</p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('start-btn').addEventListener('click', () => {
+            fetch('/start', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => alert(data.message));
+        });
+
+        document.getElementById('stop-btn').addEventListener('click', () => {
+            fetch('/stop', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => alert(data.message));
+        });
+
+        function updateStatus() {
+            fetch('/status')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('bot-status').textContent = data.status;
+                });
+        }
+
+        setInterval(updateStatus, 3000);
+
+        // Stream logs continuously
+        async function streamLogs() {
+            const logContainer = document.getElementById("log-container");
+            logContainer.innerHTML = "<p>Connecting to log stream...</p>";
+
+            try {
+                const response = await fetch("/logs");
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                logContainer.innerHTML = ""; // Clear initial message
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) {
+                        logContainer.innerHTML += "<p>Log stream disconnected.</p>";
+                        break;
+                    }
+                    const chunk = decoder.decode(value, { stream: true });
+                    logContainer.innerHTML += chunk.replace(/\\n/g, "<br>");
+                    logContainer.scrollTop = logContainer.scrollHeight;
+                }
+            } catch (error) {
+                logContainer.innerHTML = "<p>Error connecting to log stream.</p>";
+            }
+        }
+
+        streamLogs();
+    </script>
+</body>
+</html> 

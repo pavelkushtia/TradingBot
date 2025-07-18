@@ -1,7 +1,8 @@
 """Machine Learning integration for predictive modeling and feature engineering."""
 
 try:
-    from .features import FeatureEngineer, FundamentalFeatures, TechnicalFeatures
+    from .features import (FeatureEngineer, FundamentalFeatures,
+                           TechnicalFeatures)
     from .models import EnsemblePredictor, MLPredictor
     from .training import CrossValidator, ModelTrainer
 

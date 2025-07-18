@@ -416,9 +416,9 @@ class BaseStrategy(ABC):
 
         if self._indicators_available and self.indicator_manager:
             try:
-                metrics[
-                    "available_indicators"
-                ] = self.indicator_manager.get_available_indicators()
+                metrics["available_indicators"] = (
+                    self.indicator_manager.get_available_indicators()
+                )
                 metrics["indicators_per_symbol"] = {
                     symbol: list(indicators.keys())
                     for symbol, indicators in self.indicator_manager.indicators.items()

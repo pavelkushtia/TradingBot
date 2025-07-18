@@ -8,7 +8,8 @@ import pytest
 from trading_bot.backtesting.engine import BacktestEngine
 from trading_bot.core.bot import TradingBot
 from trading_bot.core.config import Config
-from trading_bot.core.models import MarketData, Order, Portfolio, Quote, StrategySignal
+from trading_bot.core.models import (MarketData, Order, Portfolio, Quote,
+                                     StrategySignal)
 from trading_bot.strategy.momentum_crossover import MomentumCrossoverStrategy
 
 

@@ -67,7 +67,7 @@ class SimplePerformanceMetrics:
         # Sortino ratio (downside deviation)
         downside_returns = [r for r in daily_returns if r < 0]
         if downside_returns:
-            downside_variance = sum(r ** 2 for r in downside_returns) / len(
+            downside_variance = sum(r**2 for r in downside_returns) / len(
                 downside_returns
             )
             downside_volatility = math.sqrt(downside_variance * 252)
@@ -107,10 +107,10 @@ class SimplePerformanceMetrics:
             )
             if std_dev > 0:
                 skewness = (sum((r - mean_ret) ** 3 for r in daily_returns) / n) / (
-                    std_dev ** 3
+                    std_dev**3
                 )
                 kurtosis = (sum((r - mean_ret) ** 4 for r in daily_returns) / n) / (
-                    std_dev ** 4
+                    std_dev**4
                 ) - 3
             else:
                 skewness = 0
@@ -324,9 +324,7 @@ class SimplePerformanceMetrics:
         profit_factor = (
             total_wins / total_losses
             if total_losses > 0
-            else float("inf")
-            if total_wins > 0
-            else 0
+            else float("inf") if total_wins > 0 else 0
         )
 
         average_win = sum(wins) / len(wins) if wins else 0

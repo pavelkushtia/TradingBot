@@ -3,16 +3,8 @@
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
-from .core import (
-    ATR,
-    EMA,
-    MACD,
-    RSI,
-    SMA,
-    BollingerBands,
-    SimpleIndicatorManager,
-    Stochastic,
-)
+from .core import (ATR, EMA, MACD, OBV, RSI, SMA, WMA, BollingerBands,
+                   SimpleIndicatorManager, Stochastic, WilliamsR)
 
 
 @dataclass
@@ -43,4 +35,7 @@ __all__ = [
     "BollingerBands",
     "ATR",
     "Stochastic",
+    "WMA",
+    "WilliamsR",
+    "OBV",
 ]

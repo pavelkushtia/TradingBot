@@ -310,7 +310,9 @@ def test_all_optimization_methods():
         successful_methods = sum(1 for result in results.values() if result.success)
 
         if successful_methods >= 3:
-            print(f"✅ {successful_methods}/{len(methods)} optimization methods working")
+            print(
+                f"✅ {successful_methods}/{len(methods)} optimization methods working"
+            )
             return True
         else:
             print(f"❌ Only {successful_methods}/{len(methods)} methods working")

@@ -372,8 +372,12 @@ def test_risk_dashboard():
         print(
             f"  📈 Portfolio volatility: {dashboard['portfolio_metrics']['volatility']:.2%}"
         )
-        print(f"  ⚡ Sharpe ratio: {dashboard['portfolio_metrics']['sharpe_ratio']:.3f}")
-        print(f"  📉 Max drawdown: {dashboard['portfolio_metrics']['max_drawdown']:.2%}")
+        print(
+            f"  ⚡ Sharpe ratio: {dashboard['portfolio_metrics']['sharpe_ratio']:.3f}"
+        )
+        print(
+            f"  📉 Max drawdown: {dashboard['portfolio_metrics']['max_drawdown']:.2%}"
+        )
         print(
             f"  🔗 Correlation risk: {dashboard['portfolio_metrics']['correlation_risk']:.3f}"
         )

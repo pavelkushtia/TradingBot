@@ -148,7 +148,8 @@ def test_strategy_integration():
 
     try:
         from trading_bot.core.models import MarketData
-        from trading_bot.strategy.momentum_crossover import MomentumCrossoverStrategy
+        from trading_bot.strategy.momentum_crossover import \
+            MomentumCrossoverStrategy
 
         # Create strategy
         strategy = MomentumCrossoverStrategy(
@@ -159,7 +160,9 @@ def test_strategy_integration():
         # Check if indicators are available
         metrics = strategy.get_performance_metrics()
         if "indicators_available" in metrics:
-            print(f"✅ Indicators integration status: {metrics['indicators_available']}")
+            print(
+                f"✅ Indicators integration status: {metrics['indicators_available']}"
+            )
 
         # Add test data
         symbol = "AAPL"

@@ -229,7 +229,7 @@ class BaseDataProvider(ABC):
 
                 if attempt < self.config.max_retries:
                     # Exponential backoff
-                    wait_time = (2 ** attempt) * 1.0
+                    wait_time = (2**attempt) * 1.0
                     await asyncio.sleep(wait_time)
                 else:
                     break

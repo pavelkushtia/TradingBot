@@ -7,17 +7,9 @@ import numpy as np
 import pytest
 
 from trading_bot.core.models import MarketData
-from trading_bot.indicators import (
-    ATR,
-    EMA,
-    MACD,
-    RSI,
-    SMA,
-    BollingerBands,
-    IndicatorConfig,
-    IndicatorManager,
-    Stochastic,
-)
+from trading_bot.indicators import (ATR, EMA, MACD, OBV, RSI, SMA, WMA,
+                                    BollingerBands, IndicatorConfig,
+                                    IndicatorManager, Stochastic, WilliamsR)
 
 
 @pytest.fixture
@@ -236,6 +228,77 @@ class TestStochastic:
         # Values should be between 0 and 100
         assert 0 <= result.value["%K"] <= 100
         assert 0 <= result.value["%D"] <= 100
+
+
+class TestWMA:
+    """Test Weighted Moving Average indicator."""
+
+    def test_wma_calculation(self, sample_market_data):
+        """Test WMA calculation accuracy."""
+        config = IndicatorConfig(period=10)
+        wma = WMA(config)
+
+        result = None
+        for bar in sample_market_data:
+            result = wma.update(bar)
+
+        assert result is not None
+        assert result.name == "WMA"
+        assert isinstance(result.value, float)
+        assert result.value > 0
+
+        # Verify calculation manually
+        last_10_closes = [float(bar.close) for bar in sample_market_data[-10:]]
+        weights = list(range(1, 11))
+        expected_wma = sum(x * w for x, w in zip(last_10_closes, weights)) / sum(
+            weights
+        )
+
+        assert abs(result.value - expected_wma) < 0.001
+
+
+class TestWilliamsR:
+    """Test Williams %R indicator."""
+
+    def test_williams_r_calculation(self, sample_market_data):
+        """Test Williams %R calculation."""
+        config = IndicatorConfig(period=14)
+        willr = WilliamsR(config)
+
+        result = None
+        for bar in sample_market_data:
+            result = willr.update(bar)
+
+        assert result is not None
+        assert result.name == "WILLR"
+        assert isinstance(result.value, float)
+        assert -100 <= result.value <= 0
+
+
+class TestOBV:
+    """Test On-Balance Volume indicator."""
+
+    def test_obv_calculation(self, sample_market_data):
+        """Test OBV calculation."""
+        obv = OBV()
+
+        result = None
+        for bar in sample_market_data:
+            result = obv.update(bar)
+
+        assert result is not None
+        assert result.name == "OBV"
+        assert isinstance(result.value, float)
+
+        # Manual calculation for verification
+        manual_obv = 0
+        for i in range(1, len(sample_market_data)):
+            if sample_market_data[i].close > sample_market_data[i - 1].close:
+                manual_obv += float(sample_market_data[i].volume)
+            elif sample_market_data[i].close < sample_market_data[i - 1].close:
+                manual_obv -= float(sample_market_data[i].volume)
+
+        assert abs(result.value - manual_obv) < 1  # Allow for small float differences
 
 
 class TestIndicatorComposite:

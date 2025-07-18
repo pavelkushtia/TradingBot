@@ -315,9 +315,7 @@ class PerformanceCalculator:
         profit_factor = (
             total_wins / total_losses
             if total_losses > 0
-            else float("inf")
-            if total_wins > 0
-            else 0
+            else float("inf") if total_wins > 0 else 0
         )
 
         average_win = np.mean(wins) if wins else 0

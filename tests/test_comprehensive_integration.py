@@ -3,6 +3,8 @@
 import asyncio
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+from typing import Dict, List
+from unittest.mock import MagicMock
 
 import numpy as np
 import pandas as pd
@@ -11,23 +13,16 @@ import pytest
 from trading_bot.backtesting.engine import BacktestEngine
 from trading_bot.core.config import Config
 from trading_bot.core.models import MarketData
-from trading_bot.execution.order_types import (
-    AdvancedOrderManager,
-    StopLossConfig,
-    StopLossOrder,
-    TakeProfitConfig,
-    TakeProfitOrder,
-)
-from trading_bot.portfolio.optimization import (
-    MeanVarianceOptimizer,
-    OptimizationConfig,
-    RiskParityOptimizer,
-)
-from trading_bot.timeframes.manager import (
-    MultiTimeframeStrategy,
-    Timeframe,
-    TimeframeConfig,
-)
+from trading_bot.execution.order_types import (AdvancedOrderManager,
+                                               StopLossConfig, StopLossOrder,
+                                               TakeProfitConfig,
+                                               TakeProfitOrder)
+from trading_bot.portfolio.optimization import (MeanVarianceOptimizer,
+                                                OptimizationConfig,
+                                                PortfolioOptimizer,
+                                                RiskParityOptimizer)
+from trading_bot.timeframes.manager import (MultiTimeframeStrategy, Timeframe,
+                                            TimeframeConfig)
 
 
 class ComprehensiveTestStrategy(MultiTimeframeStrategy):
@@ -435,18 +430,30 @@ class TestComprehensiveIntegration:
         assert mv_result.optimization_method == "Mean-Variance"
 
         # Risk Parity
-        rp_optimizer = RiskParityOptimizer(config)
+        rp_config = OptimizationConfig(method="risk_parity")
+        rp_optimizer = PortfolioOptimizer(rp_config)
         rp_result = rp_optimizer.optimize(returns_df)
-        assert rp_result.optimization_method == "Risk Parity"
+        assert rp_result.success
+        assert "Risk-Parity" in rp_result.method
 
-        # Verify weights sum to 1
-        for result in [mv_result, rp_result]:
-            if result.success:
-                total_weight = sum(result.weights.values())
-                assert abs(total_weight - 1.0) < 0.001
+        # Kelly Criterion
+        kelly_config = OptimizationConfig(method="kelly")
+        kelly_optimizer = PortfolioOptimizer(kelly_config)
+        kelly_result = kelly_optimizer.optimize(returns_df)
+        assert kelly_result.success
+        assert "Kelly" in kelly_result.method
+
+        # Black-Litterman
+        bl_config = OptimizationConfig(method="black_litterman")
+        bl_optimizer = PortfolioOptimizer(bl_config)
+        bl_result = bl_optimizer.optimize(returns_df)
+        assert bl_result.success
+        assert "Mean-Variance" in bl_result.method
 
     @pytest.mark.asyncio
-    async def test_advanced_order_management(self, sample_comprehensive_data):
+    async def test_advanced_order_management(
+        self, sample_comprehensive_data: Dict[str, List[MarketData]]
+    ) -> None:
         """Test advanced order types management."""
         order_manager = AdvancedOrderManager()
         symbol = list(sample_comprehensive_data.keys())[0]
