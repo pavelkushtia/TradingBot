@@ -102,34 +102,24 @@ class MarketDataManager:
     async def subscribe_symbols(self, symbols: List[str]) -> None:
         """Subscribe to market data for given symbols."""
         new_symbols = set(symbols) - self.subscribed_symbols
+        if not new_symbols:
+            self.logger.logger.info("No new symbols to subscribe to.")
+            return
 
-        if new_symbols:
-            # Limit to 15 symbols (based on testing: 15 works, 20 fails)
-            symbol_list = list(new_symbols)[:15]
-            self.logger.logger.info(
-                f"Subscribing to {len(symbol_list)} symbols (limited to 15): {symbol_list}"
-            )
+        symbol_list = list(new_symbols)
+        self.logger.logger.info(f"Attempting to subscribe to {len(symbol_list)} new symbols: {symbol_list}")
 
-            # Send all 15 symbols in one single request
-            try:
-                await self._subscribe_symbols_batch(symbol_list)
-                self.logger.logger.info(
-                    f"Successfully subscribed to all {len(symbol_list)} symbols in one request"
-                )
-            except Exception as e:
-                self.logger.logger.error(
-                    f"Failed to subscribe to {len(symbol_list)} symbols: {e}"
-                )
-                raise e
-
-            # Add symbols to subscribed set
+        try:
+            # The Alpaca API allows for one subscription message with multiple symbols
+            await self._subscribe_symbols_batch(symbol_list)
             self.subscribed_symbols.update(symbol_list)
-
-            # Warn if more symbols were requested
-            if len(new_symbols) > 15:
-                self.logger.logger.warning(
-                    f"Requested {len(new_symbols)} symbols but limited to 15"
-                )
+            self.logger.logger.info(
+                f"Successfully sent subscription request for {len(symbol_list)} symbols."
+            )
+        except Exception as e:
+            # Log the exception and re-raise to allow for proper error handling upstream
+            self.logger.logger.error(f"Failed to subscribe to symbols: {e}", exc_info=True)
+            raise MarketDataError(f"Failed to subscribe to symbols: {e}") from e
 
     async def unsubscribe_symbols(self, symbols: List[str]) -> None:
         """Unsubscribe from market data for given symbols."""
@@ -321,43 +311,80 @@ class MarketDataManager:
     async def _handle_quote(self, data: Dict[str, Any]) -> None:
         """Handle incoming quote data."""
         timestamp_str = data["t"]
+
+        # Normalize timestamp to handle nanoseconds and 'Z' timezone
         if "." in timestamp_str:
             parts = timestamp_str.split(".")
+            # Truncate fractional seconds to 6 digits (microseconds)
             parts[1] = parts[1][:6]
             timestamp_str = ".".join(parts)
-        quote = Quote(
-            symbol=data["S"],
-            bid_price=Decimal(str(data["bp"])),
-            bid_size=int(data["bs"]),
-            ask_price=Decimal(str(data["ap"])),
-            ask_size=int(data["as"]),
-            timestamp=datetime.fromisoformat(timestamp_str.replace("Z", "+00:00")),
-        )
-        self.latest_quotes[quote.symbol] = quote
+        
+        # Replace 'Z' with UTC offset for ISO 8601 compatibility
+        timestamp_str = timestamp_str.replace("Z", "+00:00")
 
-        # Convert quote to a MarketData-like object for the event
-        market_data = MarketData(
-            symbol=quote.symbol,
-            timestamp=quote.timestamp,
-            open=quote.mid_price,
-            high=quote.mid_price,
-            low=quote.mid_price,
-            close=quote.mid_price,
-            volume=0,  # Quotes don't have volume
-        )
-        await self.event_bus.publish("market_data", MarketDataEvent(market_data))
+        try:
+            quote = Quote(
+                symbol=data["S"],
+                bid_price=Decimal(str(data["bp"])),
+                bid_size=int(data["bs"]),
+                ask_price=Decimal(str(data["ap"])),
+                ask_size=int(data["as"]),
+                timestamp=datetime.fromisoformat(timestamp_str),
+            )
+            self.latest_quotes[quote.symbol] = quote
 
-        # Legacy callbacks
-        for callback in self.quote_callbacks:
-            try:
-                callback(quote)
-            except Exception as e:
-                self.logger.log_error(e, {"context": "quote_callback"})
+            # Convert quote to a MarketData-like object for the event
+            market_data = MarketData(
+                symbol=quote.symbol,
+                timestamp=quote.timestamp,
+                open=quote.mid_price,
+                high=quote.mid_price,
+                low=quote.mid_price,
+                close=quote.mid_price,
+                volume=0,  # Quotes don't have volume
+            )
+            await self.event_bus.publish("market_data", MarketDataEvent(market_data))
+
+            # Legacy callbacks
+            for callback in self.quote_callbacks:
+                try:
+                    callback(quote)
+                except Exception as e:
+                    self.logger.log_error(e, {"context": "quote_callback"})
+        except ValueError as e:
+            self.logger.logger.error(f"Failed to parse quote timestamp: {data['t']}. Error: {e}")
+        except Exception as e:
+            self.logger.log_error(e, {"context": "handle_quote", "data": data})
 
     async def _handle_trade(self, data: Dict[str, Any]) -> None:
         """Handle incoming trade data."""
-        price = Decimal(str(data["p"]))
-        self.latest_prices[data["S"]] = price
+        timestamp_str = data["t"]
+        
+        # Normalize timestamp to handle nanoseconds and 'Z' timezone
+        if "." in timestamp_str:
+            parts = timestamp_str.split(".")
+            # Truncate fractional seconds to 6 digits (microseconds)
+            parts[1] = parts[1][:6]
+            timestamp_str = ".".join(parts)
+            
+        # Replace 'Z' with UTC offset for ISO 8601 compatibility
+        timestamp_str = timestamp_str.replace("Z", "+00:00")
+
+        try:
+            # Although we don't create a Trade object, we can still parse the timestamp
+            # to ensure its validity and for potential future use.
+            datetime.fromisoformat(timestamp_str)
+
+            price = Decimal(str(data["p"]))
+            self.latest_prices[data["S"]] = price
+            
+            # Here you might want to create a Trade object and publish an event,
+            # similar to _handle_quote, if you need to react to individual trades.
+            
+        except ValueError as e:
+            self.logger.logger.error(f"Failed to parse trade timestamp: {data['t']}. Error: {e}")
+        except Exception as e:
+            self.logger.log_error(e, {"context": "handle_trade", "data": data})
 
     async def _handle_bar(self, data: Dict[str, Any]) -> None:
         """Handle incoming bar data."""
