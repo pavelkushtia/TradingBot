@@ -4,87 +4,943 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Trading Bot Dashboard</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
-        body { font-family: Arial, sans-serif; margin: 2em; background-color: #f4f4f9; }
-        .container { max-width: 800px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        h1 { color: #333; }
-        .controls button { padding: 10px 15px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin-right: 10px; }
-        #start-btn { background-color: #28a745; color: white; }
-        #stop-btn { background-color: #dc3545; color: white; }
-        .status { margin-top: 20px; font-size: 18px; }
-        #log-container { margin-top: 20px; background: #eee; padding: 15px; border-radius: 5px; height: 300px; overflow-y: scroll; white-space: pre-wrap; font-family: 'Courier New', Courier, monospace; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Trading Bot Control Panel</h1>
-        <div class="d-flex justify-content-center">
-            <button id="startButton" class="btn btn-primary me-2">
-                Start Bot
-            </button>
-            <button id="stopButton" class="btn btn-danger me-2">
-                Stop Bot
-            </button>
-            <a href="/analytics" class="btn btn-info">Analytics</a>
-        </div>
-        <div id="status" class="mt-3 text-center">
-            Bot Status: <span class="fw-bold">Not Running</span>
-        </div>
-        <div id="log-container">
-            <p>Logs will appear here...</p>
-        </div>
-    </div>
-
-    <script>
-        document.getElementById('startButton').addEventListener('click', () => {
-            fetch('/start', { method: 'POST' })
-                .then(response => response.json())
-                .then(data => alert(data.message));
-        });
-
-        document.getElementById('stopButton').addEventListener('click', () => {
-            fetch('/stop', { method: 'POST' })
-                .then(response => response.json())
-                .then(data => alert(data.message));
-        });
-
-        function updateStatus() {
-            fetch('/status')
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('status').textContent = `Bot Status: <span class="fw-bold">${data.status}</span>`;
-                });
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #34495e;
+            --accent-color: #3498db;
+            --success-color: #27ae60;
+            --danger-color: #e74c3c;
+            --warning-color: #f39c12;
+            --light-bg: #ecf0f1;
+            --dark-bg: #2c3e50;
+            --border-color: #bdc3c7;
         }
 
-        setInterval(updateStatus, 3000);
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 0;
+        }
 
-        // Stream logs continuously
-        async function streamLogs() {
-            const logContainer = document.getElementById("log-container");
-            logContainer.innerHTML = "<p>Connecting to log stream...</p>";
+        .dashboard-container {
+            padding: 20px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
 
-            try {
-                const response = await fetch("/logs");
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                logContainer.innerHTML = ""; // Clear initial message
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
 
-                while (true) {
-                    const { value, done } = await reader.read();
-                    if (done) {
-                        logContainer.innerHTML += "<p>Log stream disconnected.</p>";
-                        break;
-                    }
-                    const chunk = decoder.decode(value, { stream: true });
-                    logContainer.innerHTML += chunk.replace(/\\n/g, "<br>");
-                    logContainer.scrollTop = logContainer.scrollHeight;
-                }
-            } catch (error) {
-                logContainer.innerHTML = "<p>Error connecting to log stream.</p>";
+        .main-content {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            gap: 20px;
+            min-height: 0;
+        }
+
+        .panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            resize: both;
+            min-width: 300px;
+            min-height: 200px;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--light-bg);
+        }
+
+        .panel-title {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--primary-color);
+            margin: 0;
+        }
+
+        .panel-content {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Log Panel */
+        .log-container {
+            background: #1e1e1e;
+            color: #00ff00;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-y: auto;
+            flex: 1;
+            white-space: pre-wrap;
+            line-height: 1.4;
+        }
+
+        .log-entry {
+            margin-bottom: 2px;
+            word-wrap: break-word;
+        }
+
+        /* Analytics Panel */
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .metric-card {
+            background: linear-gradient(135deg, var(--accent-color), #2980b9);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .metric-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .chart-container {
+            flex: 1;
+            position: relative;
+        }
+
+        /* Symbols Panel */
+        .symbols-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .symbol-input-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .symbol-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+
+        .symbol-input:focus {
+            outline: none;
+            border-color: var(--accent-color);
+        }
+
+        .symbol-list {
+            flex: 1;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 10px;
+        }
+
+        .symbol-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            margin-bottom: 5px;
+            background: var(--light-bg);
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .symbol-item:hover {
+            background: #d5dbdb;
+        }
+
+        .symbol-remove {
+            background: var(--danger-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .symbol-remove:hover {
+            background: #c0392b;
+        }
+
+        .popular-symbols {
+            margin-top: 15px;
+        }
+
+        .popular-symbols h6 {
+            margin-bottom: 10px;
+            color: var(--primary-color);
+        }
+
+        .popular-symbols-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+            gap: 5px;
+        }
+
+        .popular-symbol {
+            background: var(--accent-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 6px 8px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .popular-symbol:hover {
+            background: #2980b9;
+        }
+
+        /* Control Panel */
+        .control-panel {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-custom {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-start {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .btn-start:hover {
+            background: #229954;
+            transform: translateY(-2px);
+        }
+
+        .btn-stop {
+            background: var(--danger-color);
+            color: white;
+        }
+
+        .btn-stop:hover {
+            background: #c0392b;
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            background: var(--secondary-color);
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #2c3e50;
+            transform: translateY(-2px);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+
+        .status-running {
+            background: rgba(39, 174, 96, 0.2);
+            color: var(--success-color);
+            border: 2px solid var(--success-color);
+        }
+
+        .status-stopped {
+            background: rgba(231, 76, 60, 0.2);
+            color: var(--danger-color);
+            border: 2px solid var(--danger-color);
+        }
+
+        .status-indicator i {
+            font-size: 1.2rem;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 1200px) {
+            .main-content {
+                grid-template-columns: 1fr;
+                grid-template-rows: repeat(4, 1fr);
             }
         }
 
-        streamLogs();
+        @media (max-width: 768px) {
+            .dashboard-container {
+                padding: 10px;
+            }
+            
+            .header {
+                padding: 15px;
+            }
+            
+            .control-panel {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .analytics-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Loading Animation */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Toast Notifications */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+        }
+
+        .toast {
+            background: white;
+            border-radius: 8px;
+            padding: 15px 20px;
+            margin-bottom: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            border-left: 4px solid var(--accent-color);
+            animation: slideIn 0.3s ease;
+        }
+
+        .toast.success {
+            border-left-color: var(--success-color);
+        }
+
+        .toast.error {
+            border-left-color: var(--danger-color);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="row align-items-center">
+                <div class="col-md-6">
+                    <h1 class="mb-0">
+                        <i class="fas fa-robot text-primary me-2"></i>
+                        Trading Bot Dashboard
+                    </h1>
+                    <p class="text-muted mb-0">Professional Trading Bot Control Center</p>
+                </div>
+                <div class="col-md-6">
+                    <div class="control-panel justify-content-end">
+                        <div class="status-indicator" id="statusIndicator">
+                            <i class="fas fa-circle"></i>
+                            <span id="statusText">Stopped</span>
+                        </div>
+                        <button class="btn-custom btn-start" id="startBtn">
+                            <i class="fas fa-play"></i>
+                            Start Bot
+                        </button>
+                        <button class="btn-custom btn-stop" id="stopBtn">
+                            <i class="fas fa-stop"></i>
+                            Stop Bot
+                        </button>
+                        <button class="btn-custom btn-secondary" id="refreshBtn">
+                            <i class="fas fa-sync-alt"></i>
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Log Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h5 class="panel-title">
+                        <i class="fas fa-terminal me-2"></i>
+                        Live Logs
+                    </h5>
+                    <div>
+                        <button class="btn btn-sm btn-outline-secondary" id="clearLogsBtn">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="panel-content">
+                    <div class="log-container" id="logContainer">
+                        <div class="text-center text-muted">
+                            <i class="fas fa-spinner fa-spin"></i>
+                            Connecting to log stream...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analytics Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h5 class="panel-title">
+                        <i class="fas fa-chart-line me-2"></i>
+                        Performance Analytics
+                    </h5>
+                    <div>
+                        <button class="btn btn-sm btn-outline-secondary" id="refreshAnalyticsBtn">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="panel-content">
+                    <div class="analytics-grid" id="analyticsGrid">
+                        <!-- Metrics will be populated here -->
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="equityChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Symbols Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h5 class="panel-title">
+                        <i class="fas fa-tags me-2"></i>
+                        Trading Symbols
+                    </h5>
+                    <div>
+                        <button class="btn btn-sm btn-outline-primary" id="saveSymbolsBtn">
+                            <i class="fas fa-save"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="panel-content">
+                    <div class="symbols-container">
+                        <div class="symbol-input-group">
+                            <input type="text" class="symbol-input" id="symbolInput" 
+                                   placeholder="Enter symbol (e.g., AAPL)">
+                            <button class="btn btn-primary" id="addSymbolBtn">
+                                <i class="fas fa-plus"></i>
+                            </button>
+                        </div>
+                        <div class="symbol-list" id="symbolList">
+                            <!-- Symbols will be populated here -->
+                        </div>
+                        <div class="popular-symbols">
+                            <h6>Popular Symbols</h6>
+                            <div class="popular-symbols-grid" id="popularSymbolsGrid">
+                                <!-- Popular symbols will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Trades Panel -->
+            <div class="panel">
+                <div class="panel-header">
+                    <h5 class="panel-title">
+                        <i class="fas fa-history me-2"></i>
+                        Recent Trades
+                    </h5>
+                </div>
+                <div class="panel-content">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Symbol</th>
+                                    <th>Side</th>
+                                    <th>Quantity</th>
+                                    <th>Price</th>
+                                    <th>Time</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recentTradesTable">
+                                <!-- Trades will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Global variables
+        let socket;
+        let equityChart;
+        let currentSymbols = [];
+        let botStatus = 'stopped';
+
+        // Initialize the dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeSocket();
+            initializeChart();
+            loadInitialData();
+            setupEventListeners();
+        });
+
+        function initializeSocket() {
+            socket = io();
+            
+            socket.on('connect', function() {
+                console.log('Connected to server');
+                showToast('Connected to trading bot', 'success');
+            });
+
+            socket.on('disconnect', function() {
+                console.log('Disconnected from server');
+                showToast('Disconnected from trading bot', 'error');
+            });
+
+            socket.on('log_update', function(data) {
+                addLogEntry(data.message);
+            });
+
+            socket.on('status_update', function(data) {
+                updateStatus(data.status);
+            });
+
+            socket.on('symbols_update', function(data) {
+                updateSymbols(data.symbols);
+            });
+        }
+
+        function initializeChart() {
+            const ctx = document.getElementById('equityChart').getContext('2d');
+            equityChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Portfolio Value',
+                        data: [],
+                        borderColor: '#3498db',
+                        backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            }
+                        },
+                        x: {
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function loadInitialData() {
+            // Load status
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    updateStatus(data.status);
+                    updateSymbols(data.symbols);
+                });
+
+            // Load symbols
+            fetch('/api/symbols')
+                .then(response => response.json())
+                .then(data => {
+                    populatePopularSymbols(data.popular_symbols);
+                });
+
+            // Load analytics
+            loadAnalytics();
+        }
+
+        function setupEventListeners() {
+            // Start/Stop buttons
+            document.getElementById('startBtn').addEventListener('click', startBot);
+            document.getElementById('stopBtn').addEventListener('click', stopBot);
+            document.getElementById('refreshBtn').addEventListener('click', refreshData);
+
+            // Log controls
+            document.getElementById('clearLogsBtn').addEventListener('click', clearLogs);
+
+            // Analytics controls
+            document.getElementById('refreshAnalyticsBtn').addEventListener('click', loadAnalytics);
+
+            // Symbol controls
+            document.getElementById('addSymbolBtn').addEventListener('click', addSymbol);
+            document.getElementById('saveSymbolsBtn').addEventListener('click', saveSymbols);
+            document.getElementById('symbolInput').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    addSymbol();
+                }
+            });
+        }
+
+        function startBot() {
+            const button = document.getElementById('startBtn');
+            const originalText = button.innerHTML;
+            
+            button.disabled = true;
+            button.innerHTML = '<span class="loading"></span> Starting...';
+
+            fetch('/api/start', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    symbols: currentSymbols
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast('Bot started successfully', 'success');
+                    updateStatus('running');
+                } else {
+                    showToast(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showToast('Error starting bot: ' + error.message, 'error');
+            })
+            .finally(() => {
+                button.disabled = false;
+                button.innerHTML = originalText;
+            });
+        }
+
+        function stopBot() {
+            const button = document.getElementById('stopBtn');
+            const originalText = button.innerHTML;
+            
+            button.disabled = true;
+            button.innerHTML = '<span class="loading"></span> Stopping...';
+
+            fetch('/api/stop', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast('Bot stopped successfully', 'success');
+                    updateStatus('stopped');
+                } else {
+                    showToast(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showToast('Error stopping bot: ' + error.message, 'error');
+            })
+            .finally(() => {
+                button.disabled = false;
+                button.innerHTML = originalText;
+            });
+        }
+
+        function refreshData() {
+            loadInitialData();
+            showToast('Data refreshed', 'success');
+        }
+
+        function updateStatus(status) {
+            botStatus = status;
+            const indicator = document.getElementById('statusIndicator');
+            const statusText = document.getElementById('statusText');
+            const startBtn = document.getElementById('startBtn');
+            const stopBtn = document.getElementById('stopBtn');
+
+            if (status === 'running') {
+                indicator.className = 'status-indicator status-running';
+                statusText.innerHTML = '<i class="fas fa-circle"></i> Running';
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+            } else {
+                indicator.className = 'status-indicator status-stopped';
+                statusText.innerHTML = '<i class="fas fa-circle"></i> Stopped';
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+            }
+        }
+
+        function addLogEntry(message) {
+            const logContainer = document.getElementById('logContainer');
+            const logEntry = document.createElement('div');
+            logEntry.className = 'log-entry';
+            logEntry.textContent = message;
+            
+            logContainer.appendChild(logEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function clearLogs() {
+            document.getElementById('logContainer').innerHTML = '';
+        }
+
+        function loadAnalytics() {
+            fetch('/api/analytics')
+                .then(response => response.json())
+                .then(data => {
+                    updateAnalytics(data);
+                })
+                .catch(error => {
+                    showToast('Error loading analytics: ' + error.message, 'error');
+                });
+        }
+
+        function updateAnalytics(data) {
+            // Update metrics grid
+            const grid = document.getElementById('analyticsGrid');
+            grid.innerHTML = `
+                <div class="metric-card">
+                    <div class="metric-value">${data.summary.total_return}</div>
+                    <div class="metric-label">Total Return</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">${data.summary.sharpe_ratio}</div>
+                    <div class="metric-label">Sharpe Ratio</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">${data.summary.max_drawdown}</div>
+                    <div class="metric-label">Max Drawdown</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-value">${data.summary.win_rate}</div>
+                    <div class="metric-label">Win Rate</div>
+                </div>
+            `;
+
+            // Update equity chart
+            if (data.equity_curve && data.equity_curve.length > 0) {
+                const labels = data.equity_curve.map(point => point[0]);
+                const values = data.equity_curve.map(point => point[1]);
+                
+                equityChart.data.labels = labels;
+                equityChart.data.datasets[0].data = values;
+                equityChart.update();
+            }
+
+            // Update recent trades
+            updateRecentTrades(data.recent_trades || []);
+        }
+
+        function updateRecentTrades(trades) {
+            const table = document.getElementById('recentTradesTable');
+            table.innerHTML = '';
+
+            trades.forEach(trade => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td><strong>${trade.symbol}</strong></td>
+                    <td><span class="badge ${trade.side === 'BUY' ? 'bg-success' : 'bg-danger'}">${trade.side}</span></td>
+                    <td>${trade.quantity}</td>
+                    <td>$${trade.price.toFixed(2)}</td>
+                    <td>${trade.timestamp}</td>
+                `;
+                table.appendChild(row);
+            });
+        }
+
+        function updateSymbols(symbols) {
+            currentSymbols = symbols;
+            const symbolList = document.getElementById('symbolList');
+            symbolList.innerHTML = '';
+
+            symbols.forEach(symbol => {
+                const symbolItem = document.createElement('div');
+                symbolItem.className = 'symbol-item';
+                symbolItem.innerHTML = `
+                    <span><strong>${symbol}</strong></span>
+                    <button class="symbol-remove" onclick="removeSymbol('${symbol}')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                `;
+                symbolList.appendChild(symbolItem);
+            });
+        }
+
+        function populatePopularSymbols(symbols) {
+            const grid = document.getElementById('popularSymbolsGrid');
+            grid.innerHTML = '';
+
+            symbols.forEach(symbol => {
+                const button = document.createElement('button');
+                button.className = 'popular-symbol';
+                button.textContent = symbol;
+                button.onclick = () => addSymbolToList(symbol);
+                grid.appendChild(button);
+            });
+        }
+
+        function addSymbol() {
+            const input = document.getElementById('symbolInput');
+            const symbol = input.value.trim().toUpperCase();
+            
+            if (symbol) {
+                addSymbolToList(symbol);
+                input.value = '';
+            }
+        }
+
+        function addSymbolToList(symbol) {
+            if (!currentSymbols.includes(symbol)) {
+                currentSymbols.push(symbol);
+                updateSymbols(currentSymbols);
+            }
+        }
+
+        function removeSymbol(symbol) {
+            currentSymbols = currentSymbols.filter(s => s !== symbol);
+            updateSymbols(currentSymbols);
+        }
+
+        function saveSymbols() {
+            fetch('/api/symbols', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    symbols: currentSymbols
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showToast('Symbols saved successfully', 'success');
+                } else {
+                    showToast(data.message, 'error');
+                }
+            })
+            .catch(error => {
+                showToast('Error saving symbols: ' + error.message, 'error');
+            });
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.remove();
+            }, 5000);
+        }
+
+        // Auto-refresh status every 5 seconds
+        setInterval(() => {
+            if (botStatus === 'running') {
+                fetch('/api/status')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status !== botStatus) {
+                            updateStatus(data.status);
+                        }
+                    });
+            }
+        }, 5000);
     </script>
 </body>
 </html> 

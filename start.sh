@@ -45,6 +45,24 @@ fi
 # Run the trading bot with provided arguments
 if [ "$1" == "web" ]; then
     echo "🌐 Starting Web Dashboard..."
+    echo "📊 Dashboard will be available at: http://localhost:5000"
+    echo "🔄 Press Ctrl+C to stop the dashboard"
+    echo ""
+    echo "🎯 Dashboard Features:"
+    echo "   • Real-time log streaming"
+    echo "   • Live performance analytics"
+    echo "   • Symbol management with popular stock picker"
+    echo "   • Bot process control (start/stop)"
+    echo "   • Responsive web interface"
+    echo "   • Resizable panels"
+    echo ""
+    
+    # Check if dashboard dependencies are installed
+    python -c "import flask_socketio" 2>/dev/null || {
+        echo "📦 Installing dashboard dependencies..."
+        pip install flask-socketio eventlet
+    }
+    
     python dashboard/app.py
     exit 0
 fi

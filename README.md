@@ -225,6 +225,9 @@ cp config.env.template .env
 
 # Run live trading (paper trading)
 ./start.sh run
+
+# Start the web dashboard
+./start.sh web
 ```
 
 **Windows:**
@@ -409,6 +412,101 @@ python main.py test
 # Run tests with coverage
 python -m pytest tests/ -v --cov=trading_bot --cov-report=html
 ```
+
+## 🌐 Web Dashboard
+
+The trading bot includes a comprehensive web dashboard for real-time monitoring and control.
+
+### 🚀 Quick Start
+
+```bash
+# Start the web dashboard
+./start.sh web
+
+# Or run directly
+python dashboard/app.py
+```
+
+### 📊 Dashboard Features
+
+#### ✅ **Bot Process Control**
+- **Start/Stop Bot**: One-click bot process management
+- **Real-time Status**: Live status indicator with visual feedback
+- **Process Monitoring**: Automatic detection of bot state changes
+
+#### ✅ **Live Log Streaming**
+- **Real-time Logs**: Live streaming of bot output with timestamps
+- **Resizable Panel**: Adjustable log window size
+- **Log Management**: Clear logs and scroll through history
+- **Auto-scroll**: Automatically scrolls to latest entries
+
+#### ✅ **Performance Analytics**
+- **Live Metrics**: Real-time performance indicators
+  - Total Return
+  - Sharpe Ratio
+  - Max Drawdown
+  - Win Rate
+- **Interactive Charts**: Chart.js powered equity curve visualization
+- **Auto-refresh**: Automatic analytics updates
+- **Responsive Design**: Charts adapt to panel size
+
+#### ✅ **Symbol Management**
+- **Popular Stock Picker**: Quick access to 100+ popular stocks
+- **Custom Symbols**: Add any stock symbol manually
+- **Symbol Categories**: Organized by sector (Tech, Finance, Healthcare, etc.)
+- **Real-time Updates**: Instant symbol list updates
+- **Persistent Storage**: Symbols saved to configuration
+
+#### ✅ **Recent Trades**
+- **Trade History**: Display recent bot trades
+- **Trade Details**: Symbol, side, quantity, price, timestamp
+- **Visual Indicators**: Color-coded buy/sell badges
+
+#### ✅ **Modern UI/UX**
+- **Responsive Design**: Works on desktop, tablet, and mobile
+- **Resizable Panels**: Drag to resize any panel
+- **Toast Notifications**: Real-time feedback for actions
+- **Loading States**: Visual feedback during operations
+- **Professional Styling**: Modern gradient design with glassmorphism
+
+### 🎯 Usage Guide
+
+1. **Start Dashboard**: Run `./start.sh web`
+2. **Open Browser**: Navigate to `http://localhost:5000`
+3. **Control Bot**: Use Start/Stop buttons to control bot process
+4. **Manage Symbols**: Add/remove trading symbols using the symbol picker
+5. **Monitor Logs**: Watch real-time bot output in the log panel
+6. **View Analytics**: Check performance metrics and charts
+7. **Resize Panels**: Drag panel corners to customize layout
+
+### 🔧 Configuration
+
+The dashboard automatically:
+- Reads bot configuration from environment variables
+- Connects to existing bot processes
+- Saves symbol changes to configuration
+- Provides real-time updates via WebSocket
+
+### 🚨 Troubleshooting
+
+#### **Dashboard won't start**
+```bash
+# Check dependencies
+pip install flask flask-socketio eventlet
+
+# Check if port 5000 is in use
+lsof -i :5000
+```
+
+#### **Log stream disconnected**
+- Bot process may have stopped
+- Check bot logs for errors
+- Restart bot from dashboard
+
+#### **Symbols not saving**
+- Check file permissions
+- Verify environment variable access
+- Check browser console for errors
 
 ## 🎨 Code Formatting
 

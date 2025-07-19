@@ -11,7 +11,6 @@ class BaseEvent(ABC):
     """Abstract base class for all events."""
 
 
-
 class EventBus:
     """A simple asynchronous event bus."""
 
