@@ -35,22 +35,22 @@ Think of this bot as a sophisticated program that:
 
 ### Key Features
 
-- **Multi-Source Market Data**: Real-time and historical data from Alpaca, Alpha Vantage, and Yahoo Finance with intelligent fallback and cost optimization
-- **Advanced Technical Indicators**: Comprehensive library with SMA, EMA, RSI, MACD, Bollinger Bands, ATR, Stochastic, and extensible framework for custom indicators
-- **Professional Backtesting Engine**: Advanced metrics including Sharpe ratio, Sortino ratio, Calmar ratio, VaR, skewness, kurtosis, drawdown analysis, and benchmark comparison
-- **Multiple Timeframes Support**: Aggregation and synchronization across different time periods (1m, 5m, 15m, 1h, 4h, 1d) with intelligent data management
-- **Portfolio Optimization**: Modern portfolio theory algorithms including Mean-Variance optimization, Risk Parity, Kelly Criterion, and Black-Litterman framework
-- **Advanced Order Types**: Stop-loss, take-profit, trailing stops, OCO (One-Cancels-Other), and bracket orders with sophisticated execution logic
-- **Enhanced Risk Management**: Position sizing algorithms, volatility-based stops, correlation analysis, and comprehensive risk dashboards
-- **Strategy Templates**: Professional trading strategies including mean reversion, momentum, pairs trading, arbitrage, and market making
-- **Machine Learning Integration**: Feature engineering, ML models (Linear, Random Forest, XGBoost), training/validation pipeline, ensemble predictions, and feature importance analysis
-- **Real-time Market Data**: Connects to live market feeds via WebSocket
-- **Multiple Trading Strategies**: Supports various algorithmic trading approaches
-- **Risk Management**: Built-in safeguards to limit losses
-- **Order Execution**: Automated buy/sell order placement
-- **Performance Monitoring**: Track profits, losses, and metrics
-- **Configuration Management**: Flexible settings via environment variables
-- **Comprehensive Logging**: Detailed audit trails for debugging
+- **Multi-Source Market Data**: Real-time and historical data from Alpaca, Alpha Vantage, and Yahoo Finance with intelligent fallback and cost optimization. `(✅ Implemented)`
+- **Advanced Technical Indicators**: Comprehensive library with SMA, EMA, RSI, MACD, Bollinger Bands, ATR, Stochastic, and extensible framework for custom indicators. `(⏳ In Development: Basic indicators implemented, advanced library pending)`
+- **Professional Backtesting Engine**: Advanced metrics including Sharpe ratio, Sortino ratio, Calmar ratio, VaR, skewness, kurtosis, drawdown analysis, and benchmark comparison. `(⏳ In Development: Basic backtesting available, professional metrics pending)`
+- **Multiple Timeframes Support**: Aggregation and synchronization across different time periods (1m, 5m, 15m, 1h, 4h, 1d) with intelligent data management. `(✅ Implemented)`
+- **Portfolio Optimization**: Modern portfolio theory algorithms including Mean-Variance optimization, Risk Parity, Kelly Criterion, and Black-Litterman framework. `(⏳ Pending)`
+- **Advanced Order Types**: Stop-loss, take-profit, trailing stops, OCO (One-Cancels-Other), and bracket orders with sophisticated execution logic. `(⏳ In Development: Basic order types available, advanced types pending)`
+- **Enhanced Risk Management**: Position sizing algorithms, volatility-based stops, correlation analysis, and comprehensive risk dashboards. `(⏳ In Development: Basic risk management implemented, enhanced features pending)`
+- **Strategy Templates**: Professional trading strategies including mean reversion, momentum, pairs trading, arbitrage, and market making. `(⏳ Pending)`
+- **Machine Learning Integration**: Feature engineering, ML models (Linear, Random Forest, XGBoost), training/validation pipeline, ensemble predictions, and feature importance analysis. `(⏳ Pending)`
+- **Real-time Market Data**: Connects to live market feeds via WebSocket. `(✅ Implemented)`
+- **Multiple Trading Strategies**: Supports various algorithmic trading approaches. `(✅ Implemented)`
+- **Risk Management**: Built-in safeguards to limit losses. `(✅ Implemented)`
+- **Order Execution**: Automated buy/sell order placement. `(✅ Implemented)`
+- **Performance Monitoring**: Track profits, losses, and metrics. `(✅ Implemented)`
+- **Configuration Management**: Flexible settings via environment variables. `(✅ Implemented)`
+- **Comprehensive Logging**: Detailed audit trails for debugging. `(✅ Implemented)`
 
 ---
 
@@ -145,7 +145,7 @@ graph TB
 
 ## Multi-Data Source Architecture
 
-The trading bot now supports multiple data sources with intelligent fallback and cost optimization mechanisms.
+The trading bot supports multiple data sources with intelligent fallback and cost optimization mechanisms.
 
 ### Data Source Architecture
 
@@ -184,6 +184,7 @@ graph TB
     K --> L
     F --> L
 ```
+*This architecture is fully implemented.*
 
 ### Data Source Selection Logic
 
@@ -197,7 +198,7 @@ The bot intelligently selects data sources based on:
 
 ## Advanced Technical Indicators
 
-The bot features a comprehensive technical indicators library, supporting both core and custom indicators for strategy development.
+The bot features a comprehensive technical indicators library, supporting both core and custom indicators for strategy development. `(Note: This section describes the target state. A basic set of indicators is currently implemented.)`
 
 ### Supported Indicators
 - Simple Moving Average (SMA)
@@ -233,11 +234,13 @@ graph TD
     I --> K
     J --> K
 ```
+*This architecture is partially implemented. The Indicator Manager and core indicators exist, but the full library of custom indicators is pending.*
 
 ### Usage Example
 
 ```python
 # Calculate indicators for a symbol
+# This example shows the target usage pattern.
 sma = indicator_manager.calculate('SMA', bars, window=20)
 rsi = indicator_manager.calculate('RSI', bars, window=14)
 macd = indicator_manager.calculate('MACD', bars, fast=12, slow=26, signal=9)
@@ -2509,3 +2512,134 @@ This trading bot represents a comprehensive, production-ready automated trading 
 This architecture provides a solid foundation for automated trading while maintaining flexibility for customization and extension. The modular design allows developers to focus on specific components (strategies, risk management, execution) without needing to understand the entire system.
 
 The bot can be operated in both paper trading mode (for testing) and live trading mode (for production), with comprehensive safeguards to prevent unintended losses and ensure reliable operation. 
+
+---
+
+## Professional Backtesting Engine
+
+The bot includes a professional-grade backtesting engine capable of simulating trading strategies against historical data with a high degree of realism. `(Note: This section describes the target state. A basic backtesting engine is currently implemented.)`
+
+### Backtesting Architecture
+
+```mermaid
+graph TD
+    subgraph "Inputs"
+        A[Strategy Parameters]
+        B[Historical Data]
+        C[Market Data]
+        D[Execution Rules]
+        E[Risk Management]
+        F[Portfolio Initialization]
+    end
+    
+    subgraph "Outputs"
+        G[Performance Report<br/>Sharpe, Sortino, Drawdown]
+        H[Trade Log<br/>All simulated trades]
+        I[Equity Curve<br/>Portfolio value over time]
+    end
+    
+    A --> G
+    B --> G
+    C --> G
+    D --> G
+    E --> G
+    F --> G
+```
+*This architecture is partially implemented. The core loop exists, but advanced metrics, slippage models, and commission calculations are pending.*
+
+### Key Features
+- **Realistic Simulation**: Models for slippage, commissions, and latency `(⏳ Pending)`
+- **Comprehensive Metrics**: Sharpe ratio, Sortino, Calmar, VaR, etc. `(⏳ Pending)`
+- **Parameter Optimization**: Tools for optimizing strategy parameters `(⏳ Pending)`
+- **Walk-forward Analysis**: Robust validation of trading strategies `(⏳ Pending)`
+
+---
+
+## Portfolio Optimization
+
+This section describes the planned portfolio optimization capabilities, which are not yet implemented. The goal is to evolve the bot from a single-asset trading system to a sophisticated portfolio manager.
+
+### Target Architecture
+
+```mermaid
+graph TD
+    A[Historical Returns] --> C
+    B[Covariance Matrix] --> C
+    C[Optimization Algorithm<br/>e.g., Mean-Variance] --> D[Optimal Weights]
+    D --> E[Rebalancing Engine]
+    E --> F[Order Execution]
+```
+*This entire feature is pending implementation.*
+
+### Optimization Techniques
+- **Mean-Variance Optimization**: Classic Markowitz model `(⏳ Pending)`
+- **Risk Parity**: Allocating capital based on risk contribution `(⏳ Pending)`
+- **Black-Litterman**: Incorporating investor views into the optimization `(⏳ Pending)`
+
+---
+
+## Enhanced Risk Management
+
+The bot includes a multi-layered risk management system to protect capital and ensure stable performance. `(Note: This section describes the target state. A basic risk management system is currently implemented.)`
+
+### Risk Management Architecture
+
+```mermaid
+graph TD
+    A[Pre-Trade Checks<br/>Position sizing, daily loss limits] --> B{Execute Trade?}
+    B -- Yes --> C[Live Position Monitoring<br/>Stop-loss, take-profit]
+    B -- No --> D[Block Trade]
+    C --> E[Post-Trade Analysis<br/>Performance attribution]
+```
+*The core components of this architecture are in place, but advanced features like correlation analysis and portfolio-level controls are pending.*
+
+### Key Risk Controls
+- **Position Sizing**: Multiple algorithms (e.g., fixed fractional, Kelly criterion) `(⏳ Pending)`
+- **Stop-Loss Orders**: Dynamic and static stop-loss placement `(✅ Implemented)`
+- **Portfolio-level Limits**: Max drawdown, concentration limits, VaR `(⏳ Pending)`
+- **Correlation Analysis**: Monitoring of portfolio diversification `(⏳ Pending)`
+
+---
+
+## Machine Learning Integration
+
+This section outlines the vision for integrating machine learning into the trading bot. The `trading_bot/ml` directory is the designated location for all ML-related code. `(Note: This entire feature is in the design and planning phase.)`
+
+### ML Architecture Vision
+
+```mermaid
+graph TD
+    subgraph "Data Pipeline"
+        A[Feature Engineering]
+        B[Data Validation]
+    end
+    subgraph "Model Lifecycle"
+        C[Model Training]
+        D[Model Validation]
+        E[Model Deployment]
+    end
+    subgraph "Inference"
+        F[Real-time Predictions]
+        G[Batch Predictions]
+    end
+    A --> C
+    B --> C
+    C --> D
+    D --> E
+    E --> F
+    E --> G
+    F --> H[Strategy Signal]
+    G --> H
+```
+*This architecture is a future goal and is not yet implemented.*
+
+### ML Model Roadmap
+1.  **Predictive Models**: Forecast price movements (e.g., LSTM, Prophet) `(⏳ Pending)`
+2.  **Sentiment Analysis**: Gauge market sentiment from news and social media `(⏳ Pending)`
+3.  **Reinforcement Learning**: Train agents to discover optimal strategies `(⏳ Pending)`
+
+---
+
+## Core Components Deep Dive
+
+</rewritten_file>

@@ -1,7 +1,7 @@
 import asyncio
-from abc import ABC, abstractmethod
+from abc import ABC
 from collections import defaultdict
-from typing import Any, Callable, Coroutine, Dict, List
+from typing import Callable, Coroutine
 
 from .models import MarketData, Order
 from .signal import StrategySignal
@@ -10,7 +10,6 @@ from .signal import StrategySignal
 class BaseEvent(ABC):
     """Abstract base class for all events."""
 
-    pass
 
 
 class EventBus:

@@ -84,7 +84,6 @@ class MultiTimeframeStrategy:
 
             async def process_bar(self, symbol: str, bar):
                 """Simple bar processing."""
-                pass
 
             def get_timeframe_data(
                 self, symbol: str, timeframe, limit: Optional[int] = None
@@ -127,7 +126,6 @@ class MultiTimeframeStrategy:
 
     async def initialize(self):
         """Initialize the strategy."""
-        pass
 
     async def on_bar(self, symbol: str, bar):
         """Handle new market data bar."""
@@ -165,7 +163,6 @@ class MultiTimeframeStrategy:
 
     async def cleanup(self):
         """Clean up resources."""
-        pass
 
     def process_timeframe(self, timeframe: str, data: TimeframeData):
         """Process data for a specific timeframe."""

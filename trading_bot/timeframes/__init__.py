@@ -5,16 +5,14 @@ from .manager import (MultiTimeframeManager, MultiTimeframeStrategy, Timeframe,
 
 # Optional imports - these modules may not exist yet
 try:
-    from .aggregator import (BarAggregator, DataAggregator,
-                             VolumeProfileAggregator)
+    pass
 
     AGGREGATOR_AVAILABLE = True
 except ImportError:
     AGGREGATOR_AVAILABLE = False
 
 try:
-    from .synchronizer import (DataAlignment, TimeframeConverter,
-                               TimeframeSynchronizer)
+    pass
 
     SYNCHRONIZER_AVAILABLE = True
 except ImportError:

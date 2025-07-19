@@ -2,7 +2,7 @@ import subprocess
 import sys
 from typing import Optional
 
-from flask import Flask, Response, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template
 from werkzeug.wrappers import Response as WerkzeugResponse
 
 app = Flask(__name__)

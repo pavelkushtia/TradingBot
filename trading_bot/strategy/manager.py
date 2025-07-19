@@ -1,7 +1,7 @@
 """Strategy management and execution coordination."""
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Type
+from typing import Any, Dict, List, Optional
 
 from ..core.config import Config
 from ..core.events import EventBus, MarketDataEvent, SignalEvent

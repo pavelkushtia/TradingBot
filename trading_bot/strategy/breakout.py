@@ -1,10 +1,8 @@
 """Breakout strategy implementation."""
 
 from decimal import Decimal
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-from ..core.logging import TradingLogger
-from ..core.models import MarketData
 from ..core.signal import StrategySignal
 from .base import BaseStrategy
 

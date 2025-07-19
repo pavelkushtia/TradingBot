@@ -19,8 +19,7 @@ from trading_bot.execution.order_types import (AdvancedOrderManager,
                                                TakeProfitOrder)
 from trading_bot.portfolio.optimization import (MeanVarianceOptimizer,
                                                 OptimizationConfig,
-                                                PortfolioOptimizer,
-                                                RiskParityOptimizer)
+                                                PortfolioOptimizer)
 from trading_bot.timeframes.manager import (MultiTimeframeStrategy, Timeframe,
                                             TimeframeConfig)
 

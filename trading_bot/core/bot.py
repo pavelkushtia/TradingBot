@@ -219,7 +219,6 @@ class TradingBot:
     async def _execute_signals(self, signals: List[StrategySignal]) -> None:
         """Execute approved trading signals."""
         # This will be handled by the event bus
-        pass
 
     async def _signal_to_order(self, signal: StrategySignal) -> Optional[Order]:
         """Convert a strategy signal to an order (shared logic with backtesting)."""

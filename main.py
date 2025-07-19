@@ -124,8 +124,7 @@ class TradingBotCLI:
             if existing_instances:
                 console.print(
                     f"[yellow]Warning: Found {len(existing_instances)} existing trading bot instance(s) "
-                    f"with PID(s): {', '.join(map(str, existing_instances))}[/yellow]"
-                )
+                    f"with PID(s): {', '.join(map(str, existing_instances))}[/yellow]")
                 console.print(
                     "[yellow]Multiple instances may cause WebSocket connection limit errors.[/yellow]"
                 )

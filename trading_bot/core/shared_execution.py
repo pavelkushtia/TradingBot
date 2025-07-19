@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Dict, List, Optional, Tuple
+from typing import Optional
 from uuid import uuid4
 
 from .models import Order, OrderSide, OrderType, Trade

@@ -361,7 +361,6 @@ class ExecutionManager:
             f"Paper trading: Simulating cancellation for order {order.id}"
         )
         # No external state to change, just log and update status
-        pass
 
     def _should_fill(self) -> bool:
         """Randomly decide if a paper order should be filled."""

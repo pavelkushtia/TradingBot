@@ -657,7 +657,6 @@ class SimpleIndicatorManager:
                 "volatility_regime": "normal",
             }
 
-        signals = {}
         bullish_signals = 0
         bearish_signals = 0
         total_signals = 0

@@ -1,9 +1,7 @@
 """Mean reversion strategy implementation."""
 
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-from ..core.models import MarketData
 from ..core.signal import StrategySignal
 from .base import BaseStrategy
 

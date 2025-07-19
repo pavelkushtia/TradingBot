@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Set
 
-from ..core.logging import TradingLogger
 from ..core.models import MarketData, Quote
 from ..core.signal import StrategySignal
 

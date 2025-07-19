@@ -1,10 +1,7 @@
 """Machine Learning integration for predictive modeling and feature engineering."""
 
 try:
-    from .features import (FeatureEngineer, FundamentalFeatures,
-                           TechnicalFeatures)
-    from .models import EnsemblePredictor, MLPredictor
-    from .training import CrossValidator, ModelTrainer
+    pass
 
     ML_AVAILABLE = True
     __all__ = [
