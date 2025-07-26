@@ -8,9 +8,18 @@ from ..core.config import Config
 from ..core.events import EventBus
 from ..core.exceptions import BacktestError
 from ..core.logging import TradingLogger
-from ..core.models import (MarketData, Order, OrderSide, OrderStatus,
-                           OrderType, PerformanceMetrics, Portfolio, Position,
-                           PositionSide, Trade)
+from ..core.models import (
+    MarketData,
+    Order,
+    OrderSide,
+    OrderStatus,
+    OrderType,
+    PerformanceMetrics,
+    Portfolio,
+    Position,
+    PositionSide,
+    Trade,
+)
 from ..core.shared_execution import SharedExecutionLogic
 from ..risk.manager import RiskManager
 from ..strategy.base import BaseStrategy

@@ -276,11 +276,13 @@ def test_strategy_template_library():
     print("\n🧪 Testing strategy template library...")
 
     try:
-        from trading_bot.strategy.templates import (ArbitrageTemplate,
-                                                    MarketMakingTemplate,
-                                                    MeanReversionTemplate,
-                                                    MomentumTemplate,
-                                                    PairsTradingTemplate)
+        from trading_bot.strategy.templates import (
+            ArbitrageTemplate,
+            MarketMakingTemplate,
+            MeanReversionTemplate,
+            MomentumTemplate,
+            PairsTradingTemplate,
+        )
 
         # Create all strategy types
         strategies = [

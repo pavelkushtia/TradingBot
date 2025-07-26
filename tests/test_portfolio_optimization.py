@@ -4,12 +4,14 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from trading_bot.portfolio.optimization import (BlackLittermanOptimizer,
-                                                KellyCriterionOptimizer,
-                                                MeanVarianceOptimizer,
-                                                OptimizationConfig,
-                                                OptimizationResult,
-                                                RiskParityOptimizer)
+from trading_bot.portfolio.optimization import (
+    BlackLittermanOptimizer,
+    KellyCriterionOptimizer,
+    MeanVarianceOptimizer,
+    OptimizationConfig,
+    OptimizationResult,
+    RiskParityOptimizer,
+)
 
 
 @pytest.fixture

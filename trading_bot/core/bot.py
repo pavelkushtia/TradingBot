@@ -122,9 +122,45 @@ class TradingBot:
             for symbol in configured_symbols:
                 strategy.symbols.add(symbol)
 
+        # Load historical data for strategies
+        await self._load_historical_data_for_strategies(configured_symbols)
+
         self.logger.logger.info(
             f"Initialized strategies with symbols: {configured_symbols}"
         )
+
+    async def _load_historical_data_for_strategies(self, symbols: List[str]) -> None:
+        """Load historical data for all strategies."""
+        self.logger.logger.info("Loading historical data for strategies...")
+
+        for symbol in symbols:
+            try:
+                # Load historical bars (last 1000 minutes should be enough for most strategies)
+                historical_bars = await self.market_data_manager.get_historical_bars(
+                    symbol, timeframe="1min", limit=1000
+                )
+
+                if historical_bars:
+                    self.logger.logger.info(
+                        f"Loaded {len(historical_bars)} historical bars for {symbol}"
+                    )
+
+                    # Feed historical data to all strategies
+                    for strategy in self.strategy_manager.strategies.values():
+                        for bar in historical_bars:
+                            await strategy.on_bar(symbol, bar)
+                else:
+                    self.logger.logger.warning(
+                        f"No historical data available for {symbol}"
+                    )
+
+            except Exception as e:
+                self.logger.log_error(
+                    e, {"context": "load_historical_data", "symbol": symbol}
+                )
+                self.logger.logger.warning(
+                    f"Failed to load historical data for {symbol}: {e}"
+                )
 
     async def _shutdown_managers(self) -> None:
         """Shutdown all manager components."""

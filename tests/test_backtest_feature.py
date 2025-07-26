@@ -19,8 +19,7 @@ def test_simple_metrics():
     print("🧪 Testing SimplePerformanceMetrics...")
 
     try:
-        from trading_bot.backtesting.simple_metrics import \
-            SimplePerformanceMetrics
+        from trading_bot.backtesting.simple_metrics import SimplePerformanceMetrics
 
         print("✅ SimplePerformanceMetrics imported successfully")
     except Exception as e:
@@ -118,8 +117,7 @@ def test_performance_report():
     print("\n🧪 Testing performance report generation...")
 
     try:
-        from trading_bot.backtesting.simple_metrics import \
-            SimplePerformanceMetrics
+        from trading_bot.backtesting.simple_metrics import SimplePerformanceMetrics
 
         metrics_calc = SimplePerformanceMetrics()
 
@@ -189,8 +187,7 @@ def test_edge_cases():
     print("\n🧪 Testing edge cases...")
 
     try:
-        from trading_bot.backtesting.simple_metrics import \
-            SimplePerformanceMetrics
+        from trading_bot.backtesting.simple_metrics import SimplePerformanceMetrics
 
         metrics_calc = SimplePerformanceMetrics()
 

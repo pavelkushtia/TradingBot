@@ -212,16 +212,67 @@ class MarketDataManager:
                     error_text = await response.text()
                     self.logger.logger.warning(
                         f"Data API failed for {symbol}: {error_text}. "
-                        f"This may be due to free account limitations."
+                        f"Trying Yahoo Finance fallback..."
                     )
-                    # Return empty list for graceful degradation
-                    return []
+                    # Try Yahoo Finance fallback
+                    return await self._get_historical_bars_yahoo_fallback(
+                        symbol, timeframe, start, end, limit
+                    )
 
         except Exception as e:
             self.logger.log_error(
                 e, {"context": "get_historical_bars", "symbol": symbol}
             )
-            raise MarketDataError(f"Error fetching historical data: {e}")
+            # Try Yahoo Finance fallback on any error
+            return await self._get_historical_bars_yahoo_fallback(
+                symbol, timeframe, start, end, limit
+            )
+
+    async def _get_historical_bars_yahoo_fallback(
+        self,
+        symbol: str,
+        timeframe: str,
+        start: datetime,
+        end: datetime,
+        limit: int,
+    ) -> List[MarketData]:
+        """Fallback to Yahoo Finance for historical data."""
+        try:
+            from .providers.yahoo import YahooFinanceProvider
+            from .providers.base import DataProviderConfig
+
+            # Create Yahoo Finance provider config
+            yahoo_config = DataProviderConfig(
+                name="yahoo_finance", timeout=10.0, rate_limit=60, max_retries=3
+            )
+
+            # Create Yahoo Finance provider
+            yahoo_provider = YahooFinanceProvider(yahoo_config)
+            await yahoo_provider.initialize()
+
+            # Ensure timezone-aware datetimes for Yahoo Finance
+            if start.tzinfo is None:
+                start = start.replace(tzinfo=timezone.utc)
+            if end.tzinfo is None:
+                end = end.replace(tzinfo=timezone.utc)
+
+            # Get historical data from Yahoo Finance
+            bars = await yahoo_provider.get_historical_bars(
+                symbol, timeframe, start, end, limit
+            )
+
+            self.logger.logger.info(
+                f"Successfully loaded {len(bars)} historical bars for {symbol} from Yahoo Finance"
+            )
+
+            await yahoo_provider.cleanup()
+            return bars
+
+        except Exception as e:
+            self.logger.logger.error(
+                f"Yahoo Finance fallback also failed for {symbol}: {e}"
+            )
+            return []
 
     def register_quote_callback(self, callback: Callable[[Quote], None]) -> None:
         """Register callback for real-time quotes."""

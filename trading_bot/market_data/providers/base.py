@@ -4,7 +4,7 @@ import asyncio
 import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -211,7 +211,9 @@ class BaseDataProvider(ABC):
         if start >= end:
             raise ValueError("Start date must be before end date")
 
-        if end > datetime.now():
+        # Ensure timezone-aware comparison
+        now = datetime.now(timezone.utc)
+        if end > now:
             raise ValueError("End date cannot be in the future")
 
     async def _execute_with_retry(self, operation, *args, **kwargs):

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Popular Symbols</title>
+    <style>
+        .popular-symbols-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+            gap: 8px;
+            max-height: 120px;
+            overflow-y: auto;
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+        .popular-symbol {
+            background: #3498db;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 8px 10px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: background 0.2s ease;
+            text-align: center;
+        }
+        .popular-symbol:hover {
+            background: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Popular Symbols</h1>
+    <button onclick="loadSymbols()">Load Popular Symbols</button>
+    <div id="popularSymbolsGrid" class="popular-symbols-grid">
+        <!-- Popular symbols will be populated here -->
+    </div>
+
+    <script>
+        function loadSymbols() {
+            fetch('/api/symbols')
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Symbols API response:', data);
+                    const popularSymbols = data.popular_symbols || [];
+                    console.log('Popular symbols count:', popularSymbols.length);
+                    
+                    const grid = document.getElementById('popularSymbolsGrid');
+                    grid.innerHTML = '';
+
+                    if (popularSymbols.length === 0) {
+                        grid.innerHTML = '<div style="text-align: center; color: #666;">No symbols available</div>';
+                        return;
+                    }
+
+                    // Show first 20 symbols
+                    const symbolsToShow = popularSymbols.slice(0, 20);
+                    
+                    symbolsToShow.forEach(symbol => {
+                        const button = document.createElement('button');
+                        button.className = 'popular-symbol';
+                        button.textContent = symbol;
+                        button.onclick = () => alert('Clicked: ' + symbol);
+                        grid.appendChild(button);
+                    });
+
+                    if (popularSymbols.length > 20) {
+                        const moreButton = document.createElement('button');
+                        moreButton.className = 'popular-symbol';
+                        moreButton.textContent = `+${popularSymbols.length - 20} more`;
+                        moreButton.onclick = () => alert('Show more clicked');
+                        grid.appendChild(moreButton);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading symbols:', error);
+                    document.getElementById('popularSymbolsGrid').innerHTML = 
+                        '<div style="text-align: center; color: red;">Error loading symbols</div>';
+                });
+        }
+    </script>
+</body>
+</html> 

@@ -148,8 +148,7 @@ def test_strategy_integration():
 
     try:
         from trading_bot.core.models import MarketData
-        from trading_bot.strategy.momentum_crossover import \
-            MomentumCrossoverStrategy
+        from trading_bot.strategy.momentum_crossover import MomentumCrossoverStrategy
 
         # Create strategy
         strategy = MomentumCrossoverStrategy(

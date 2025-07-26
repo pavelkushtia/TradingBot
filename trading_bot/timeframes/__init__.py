@@ -1,7 +1,13 @@
 """Multi-timeframe support for trading strategies."""
 
-from .manager import (MultiTimeframeManager, MultiTimeframeStrategy, Timeframe,
-                      TimeframeAggregator, TimeframeConfig, TimeframeData)
+from .manager import (
+    MultiTimeframeManager,
+    MultiTimeframeStrategy,
+    Timeframe,
+    TimeframeAggregator,
+    TimeframeConfig,
+    TimeframeData,
+)
 
 # Optional imports - these modules may not exist yet
 try:

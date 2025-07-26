@@ -13,15 +13,23 @@ import pytest
 from trading_bot.backtesting.engine import BacktestEngine
 from trading_bot.core.config import Config
 from trading_bot.core.models import MarketData
-from trading_bot.execution.order_types import (AdvancedOrderManager,
-                                               StopLossConfig, StopLossOrder,
-                                               TakeProfitConfig,
-                                               TakeProfitOrder)
-from trading_bot.portfolio.optimization import (MeanVarianceOptimizer,
-                                                OptimizationConfig,
-                                                PortfolioOptimizer)
-from trading_bot.timeframes.manager import (MultiTimeframeStrategy, Timeframe,
-                                            TimeframeConfig)
+from trading_bot.execution.order_types import (
+    AdvancedOrderManager,
+    StopLossConfig,
+    StopLossOrder,
+    TakeProfitConfig,
+    TakeProfitOrder,
+)
+from trading_bot.portfolio.optimization import (
+    MeanVarianceOptimizer,
+    OptimizationConfig,
+    PortfolioOptimizer,
+)
+from trading_bot.timeframes.manager import (
+    MultiTimeframeStrategy,
+    Timeframe,
+    TimeframeConfig,
+)
 
 
 class ComprehensiveTestStrategy(MultiTimeframeStrategy):

@@ -1,15 +1,18 @@
 import json
-import os
-import signal
 import subprocess
 import sys
 import threading
 import time
-from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Set
-
+from datetime import datetime, timedelta
+import os
+import signal
 import psutil
-from flask import Flask, Response, jsonify, render_template, request
+import aiohttp
+import asyncio
+from decimal import Decimal
+
+from flask import Flask, Response, jsonify, render_template, request, send_file
 from flask_socketio import SocketIO, emit
 from werkzeug.wrappers import Response as WerkzeugResponse
 
@@ -25,9 +28,14 @@ current_symbols: Set[str] = set()
 analytics_data: Dict = {}
 log_buffer_size = 1000
 
-# Popular stock symbols for the picker
+# Alpaca API configuration
+ALPACA_BASE_URL = os.getenv("ALPACA_BASE_URL", "https://paper-api.alpaca.markets")
+ALPACA_API_KEY = os.getenv("ALPACA_API_KEY", "")
+ALPACA_SECRET_KEY = os.getenv("ALPACA_SECRET_KEY", "")
+
+# Popular stock symbols for the picker (expanded list)
 POPULAR_SYMBOLS = [
-    # Tech
+    # Tech Giants
     "AAPL",
     "GOOGL",
     "MSFT",
@@ -38,6 +46,16 @@ POPULAR_SYMBOLS = [
     "NFLX",
     "ADBE",
     "CRM",
+    "ORCL",
+    "INTC",
+    "AMD",
+    "QCOM",
+    "PYPL",
+    "UBER",
+    "LYFT",
+    "ZM",
+    "SHOP",
+    "SQ",
     # Finance
     "JPM",
     "BAC",
@@ -49,6 +67,16 @@ POPULAR_SYMBOLS = [
     "AXP",
     "BLK",
     "SCHW",
+    "COF",
+    "USB",
+    "PNC",
+    "TFC",
+    "KEY",
+    "HBAN",
+    "FITB",
+    "RF",
+    "ZION",
+    "CMA",
     # Healthcare
     "JNJ",
     "PFE",
@@ -60,6 +88,16 @@ POPULAR_SYMBOLS = [
     "DHR",
     "BMY",
     "AMGN",
+    "GILD",
+    "CVS",
+    "CI",
+    "ANTM",
+    "HUM",
+    "CNC",
+    "DVA",
+    "HCA",
+    "UHS",
+    "THC",
     # Consumer
     "KO",
     "PEP",
@@ -71,6 +109,16 @@ POPULAR_SYMBOLS = [
     "SBUX",
     "TGT",
     "COST",
+    "LOW",
+    "TJX",
+    "M",
+    "KSS",
+    "JWN",
+    "GPS",
+    "LB",
+    "URBN",
+    "ROST",
+    "TJX",
     # Energy
     "XOM",
     "CVX",
@@ -82,6 +130,16 @@ POPULAR_SYMBOLS = [
     "VLO",
     "MPC",
     "OXY",
+    "HAL",
+    "BKR",
+    "NOV",
+    "FTI",
+    "WMB",
+    "OKE",
+    "PXD",
+    "EOG",
+    "DVN",
+    "APC",
     # Industrial
     "BA",
     "CAT",
@@ -93,6 +151,16 @@ POPULAR_SYMBOLS = [
     "RTX",
     "LMT",
     "NOC",
+    "GD",
+    "TXT",
+    "EMR",
+    "ETN",
+    "PH",
+    "DOV",
+    "XYL",
+    "AME",
+    "ITW",
+    "ROK",
     # Materials
     "LIN",
     "APD",
@@ -104,6 +172,16 @@ POPULAR_SYMBOLS = [
     "EMN",
     "BLL",
     "IFF",
+    "NUE",
+    "STLD",
+    "X",
+    "AKS",
+    "RS",
+    "BLL",
+    "VMC",
+    "MLM",
+    "CRH",
+    "VMC",
     # Utilities
     "NEE",
     "DUK",
@@ -115,9 +193,29 @@ POPULAR_SYMBOLS = [
     "PCG",
     "DTE",
     "ED",
+    "EIX",
+    "AEE",
+    "WEC",
+    "CMS",
+    "CNP",
+    "NI",
+    "OGE",
+    "PEG",
+    "SJI",
+    "UIL",
     # Real Estate
     "AMT",
     "PLD",
+    "CCI",
+    "EQIX",
+    "PSA",
+    "SPG",
+    "O",
+    "DLR",
+    "WELL",
+    "VICI",
+    "PLD",
+    "AMT",
     "CCI",
     "EQIX",
     "PSA",
@@ -135,8 +233,8 @@ POPULAR_SYMBOLS = [
     "LUMN",
     "CTL",
     "VZ",
-    "T",
     "TMUS",
+    "LUMN",
 ]
 
 
@@ -150,7 +248,7 @@ def get_bot_status() -> str:
     return "stopped"
 
 
-def add_log_entry(message: str):
+def add_log_entry(message: str) -> None:
     """Add a log entry to the buffer."""
     global bot_logs
     timestamp = datetime.now().strftime("%H:%M:%S")
@@ -165,7 +263,7 @@ def add_log_entry(message: str):
     socketio.emit("log_update", {"message": log_entry})
 
 
-def read_bot_output():
+def read_bot_output() -> None:
     """Read output from the bot process and emit to clients."""
     global bot_process
     while True:
@@ -192,7 +290,7 @@ def load_symbols_from_config() -> Set[str]:
         return {"AAPL", "GOOGL", "MSFT"}
 
 
-def save_symbols_to_config(symbols: Set[str]):
+def save_symbols_to_config(symbols: Set[str]) -> None:
     """Save symbols to environment configuration."""
     try:
         symbols_str = ",".join(sorted(symbols))
@@ -203,10 +301,168 @@ def save_symbols_to_config(symbols: Set[str]):
         add_log_entry(f"Error saving symbols: {e}")
 
 
+async def get_alpaca_account_data() -> Dict:
+    """Get real account data from Alpaca API."""
+    if not ALPACA_API_KEY or not ALPACA_SECRET_KEY:
+        return {"error": "Alpaca API credentials not configured"}
+
+    headers = {
+        "APCA-API-KEY-ID": ALPACA_API_KEY,
+        "APCA-API-SECRET-KEY": ALPACA_SECRET_KEY,
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            # Get account information
+            async with session.get(
+                f"{ALPACA_BASE_URL}/v2/account", headers=headers
+            ) as response:
+                if response.status == 200:
+                    account_data = await response.json()
+                    return {
+                        "portfolio_value": float(
+                            account_data.get("portfolio_value", 0)
+                        ),
+                        "cash": float(account_data.get("cash", 0)),
+                        "buying_power": float(account_data.get("buying_power", 0)),
+                        "account_status": account_data.get("status", "unknown"),
+                    }
+                else:
+                    return {"error": f"Failed to get account data: {response.status}"}
+    except Exception as e:
+        return {"error": f"Error connecting to Alpaca: {str(e)}"}
+
+
+async def get_alpaca_positions() -> List[Dict]:
+    """Get real positions from Alpaca API."""
+    if not ALPACA_API_KEY or not ALPACA_SECRET_KEY:
+        return []
+
+    headers = {
+        "APCA-API-KEY-ID": ALPACA_API_KEY,
+        "APCA-API-SECRET-KEY": ALPACA_SECRET_KEY,
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{ALPACA_BASE_URL}/v2/positions", headers=headers
+            ) as response:
+                if response.status == 200:
+                    positions = await response.json()
+                    return [
+                        {
+                            "symbol": pos.get("symbol"),
+                            "side": pos.get("side"),
+                            "quantity": float(pos.get("qty", 0)),
+                            "market_value": float(pos.get("market_value", 0)),
+                            "unrealized_pl": float(pos.get("unrealized_pl", 0)),
+                            "avg_entry_price": float(pos.get("avg_entry_price", 0)),
+                        }
+                        for pos in positions
+                    ]
+                else:
+                    return []
+    except Exception as e:
+        add_log_entry(f"Error getting positions: {e}")
+        return []
+
+
+async def get_alpaca_orders() -> List[Dict]:
+    """Get real orders from Alpaca API."""
+    if not ALPACA_API_KEY or not ALPACA_SECRET_KEY:
+        return []
+
+    headers = {
+        "APCA-API-KEY-ID": ALPACA_API_KEY,
+        "APCA-API-SECRET-KEY": ALPACA_SECRET_KEY,
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            # Get recent orders
+            params = {"status": "all", "limit": 50}
+            async with session.get(
+                f"{ALPACA_BASE_URL}/v2/orders", headers=headers, params=params
+            ) as response:
+                if response.status == 200:
+                    orders = await response.json()
+                    return [
+                        {
+                            "id": order.get("id"),
+                            "symbol": order.get("symbol"),
+                            "side": order.get("side"),
+                            "quantity": float(order.get("qty", 0)),
+                            "price": float(order.get("filled_avg_price", 0)),
+                            "status": order.get("status"),
+                            "created_at": order.get("created_at"),
+                            "filled_at": order.get("filled_at"),
+                        }
+                        for order in orders
+                        if order.get("status") in ["filled", "partially_filled"]
+                    ]
+                else:
+                    return []
+    except Exception as e:
+        add_log_entry(f"Error getting orders: {e}")
+        return []
+
+
+async def get_alpaca_portfolio_history() -> List[List]:
+    """Get real portfolio history from Alpaca API."""
+    if not ALPACA_API_KEY or not ALPACA_SECRET_KEY:
+        return []
+
+    headers = {
+        "APCA-API-KEY-ID": ALPACA_API_KEY,
+        "APCA-API-SECRET-KEY": ALPACA_SECRET_KEY,
+        "Content-Type": "application/json",
+    }
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            # Get portfolio history for the last 30 days
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=30)
+
+            params = {
+                "period": "1D",
+                "start": start_date.strftime("%Y-%m-%d"),
+                "end": end_date.strftime("%Y-%m-%d"),
+            }
+
+            async with session.get(
+                f"{ALPACA_BASE_URL}/v2/account/portfolio/history",
+                headers=headers,
+                params=params,
+            ) as response:
+                if response.status == 200:
+                    history = await response.json()
+                    equity_data = history.get("equity", [])
+                    return [
+                        [entry.get("date", ""), float(entry.get("value", 0))]
+                        for entry in equity_data
+                    ]
+                else:
+                    return []
+    except Exception as e:
+        add_log_entry(f"Error getting portfolio history: {e}")
+        return []
+
+
 @app.route("/")
 def index() -> str:
     """Main dashboard page."""
     return render_template("index.html")
+
+
+@app.route("/test")
+def test() -> Response:
+    """Serve the test page for popular symbols."""
+    return send_file("test_popular_symbols.html")
 
 
 @app.route("/api/status")
@@ -254,7 +510,7 @@ def api_start_bot() -> WerkzeugResponse:
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
-            cwd="..",  # Run from the project root directory
+            cwd=".",  # Run from the current directory (project root)
             bufsize=1,
             universal_newlines=True,
         )
@@ -262,6 +518,10 @@ def api_start_bot() -> WerkzeugResponse:
         # Start log reading thread
         log_thread = threading.Thread(target=read_bot_output, daemon=True)
         log_thread.start()
+
+        # Add initial log entry
+        add_log_entry(f"Starting bot with symbols: {', '.join(symbols)}")
+        add_log_entry(f"Bot process started with PID: {bot_process.pid}")
 
         add_log_entry("Bot started successfully")
         return jsonify({"status": "success", "message": "Bot started successfully"})
@@ -349,63 +609,153 @@ def api_symbols() -> WerkzeugResponse:
 
 @app.route("/api/analytics")
 def api_analytics() -> WerkzeugResponse:
-    """Get analytics data."""
-    # Generate sample analytics data
-    # In a real implementation, this would come from your trading bot
-    import random
+    """Get real analytics data from Alpaca API."""
+    try:
+        # Try to get real Alpaca data if credentials are available
+        if ALPACA_API_KEY and ALPACA_SECRET_KEY:
+            # Use asyncio to run async functions in sync context
+            import asyncio
 
-    # Generate sample equity curve
-    base_value = 100000
-    equity_curve = []
-    current_value = base_value
+            try:
+                # Get real account data
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                account_data = loop.run_until_complete(get_alpaca_account_data())
 
-    for i in range(30):
-        date = (datetime.now() - timedelta(days=29 - i)).strftime("%Y-%m-%d")
-        # Add some realistic volatility
-        change = random.uniform(-0.02, 0.03) * current_value
-        current_value += change
-        equity_curve.append([date, round(current_value, 2)])
+                if "error" not in account_data:
+                    # Get real portfolio history
+                    equity_curve = loop.run_until_complete(
+                        get_alpaca_portfolio_history()
+                    )
 
-    # Calculate metrics
-    total_return = ((current_value - base_value) / base_value) * 100
-    sharpe_ratio = random.uniform(0.8, 2.5)
-    max_drawdown = random.uniform(-0.05, -0.02) * 100
+                    # Get real positions
+                    positions = loop.run_until_complete(get_alpaca_positions())
 
-    analytics_data = {
-        "summary": {
-            "total_return": f"{total_return:.2f}%",
-            "sharpe_ratio": f"{sharpe_ratio:.2f}",
-            "max_drawdown": f"{max_drawdown:.2f}%",
-            "win_rate": f"{random.uniform(45, 75):.1f}%",
-            "total_trades": random.randint(50, 200),
-            "profit_factor": f"{random.uniform(1.1, 2.5):.2f}",
-        },
-        "portfolio": {
-            "total_value": f"${current_value:,.2f}",
-            "cash": f"${random.uniform(10000, 50000):,.2f}",
-            "positions": random.randint(3, 8),
-            "daily_pnl": f"${random.uniform(-5000, 10000):,.2f}",
-        },
-        "equity_curve": equity_curve,
-        "recent_trades": [
-            {
-                "symbol": "AAPL",
-                "side": "BUY",
-                "quantity": 100,
-                "price": 150.25,
-                "timestamp": "2024-01-15 10:30:00",
+                    # Get real orders
+                    orders = loop.run_until_complete(get_alpaca_orders())
+
+                    # Calculate metrics
+                    portfolio_value = account_data.get("portfolio_value", 0)
+                    cash = account_data.get("cash", 0)
+                    positions_count = len(positions)
+
+                    # Calculate total return (simplified)
+                    if equity_curve and len(equity_curve) > 1:
+                        initial_value = equity_curve[0][1]
+                        current_value = equity_curve[-1][1]
+                        total_return = (
+                            (current_value - initial_value) / initial_value
+                        ) * 100
+                    else:
+                        total_return = 0.0
+
+                    # Convert orders to recent trades format
+                    recent_trades = []
+                    for order in orders[:10]:  # Last 10 trades
+                        if order.get("filled_at"):
+                            recent_trades.append(
+                                {
+                                    "symbol": order.get("symbol", ""),
+                                    "side": order.get("side", "").upper(),
+                                    "quantity": int(order.get("quantity", 0)),
+                                    "price": order.get("price", 0.0),
+                                    "timestamp": order.get("filled_at", ""),
+                                }
+                            )
+
+                    analytics_data = {
+                        "summary": {
+                            "total_return": f"{total_return:.2f}%",
+                            "sharpe_ratio": "0.00",  # Would need more data to calculate
+                            "max_drawdown": "0.00%",  # Would need more data to calculate
+                            "win_rate": "0.0%",  # Would need more data to calculate
+                            "total_trades": len(orders),
+                            "profit_factor": "0.00",  # Would need more data to calculate
+                        },
+                        "portfolio": {
+                            "total_value": f"${portfolio_value:,.2f}",
+                            "cash": f"${cash:,.2f}",
+                            "positions": positions_count,
+                            "daily_pnl": "$0.00",  # Would need more data to calculate
+                        },
+                        "equity_curve": equity_curve,
+                        "recent_trades": recent_trades,
+                    }
+
+                    loop.close()
+                    return jsonify(analytics_data)
+
+                loop.close()
+
+            except Exception as e:
+                add_log_entry(f"Error getting real Alpaca data: {e}")
+
+        # Fallback to sample data if Alpaca API not available or fails
+        analytics_data = {
+            "summary": {
+                "total_return": "2.45%",
+                "sharpe_ratio": "1.23",
+                "max_drawdown": "-1.85%",
+                "win_rate": "68.5%",
+                "total_trades": 45,
+                "profit_factor": "1.85",
             },
-            {
-                "symbol": "GOOGL",
-                "side": "SELL",
-                "quantity": 50,
-                "price": 2800.75,
-                "timestamp": "2024-01-15 09:45:00",
+            "portfolio": {
+                "total_value": "$102,450.00",
+                "cash": "$15,230.00",
+                "positions": 3,
+                "daily_pnl": "$1,250.00",
             },
-        ],
-    }
+            "equity_curve": [
+                ["2024-01-01", 100000],
+                ["2024-01-02", 100500],
+                ["2024-01-03", 101200],
+                ["2024-01-04", 100800],
+                ["2024-01-05", 102450],
+            ],
+            "recent_trades": [
+                {
+                    "symbol": "AAPL",
+                    "side": "BUY",
+                    "quantity": 100,
+                    "price": 150.25,
+                    "timestamp": "2024-01-15 10:30:00",
+                },
+                {
+                    "symbol": "GOOGL",
+                    "side": "SELL",
+                    "quantity": 50,
+                    "price": 2800.75,
+                    "timestamp": "2024-01-15 09:45:00",
+                },
+            ],
+        }
 
-    return jsonify(analytics_data)
+        return jsonify(analytics_data)
+
+    except Exception as e:
+        add_log_entry(f"Error getting analytics: {e}")
+        return jsonify(
+            {
+                "summary": {
+                    "total_return": "0.00%",
+                    "sharpe_ratio": "0.00",
+                    "max_drawdown": "0.00%",
+                    "win_rate": "0.0%",
+                    "total_trades": 0,
+                    "profit_factor": "0.00",
+                },
+                "portfolio": {
+                    "total_value": "$0.00",
+                    "cash": "$0.00",
+                    "positions": 0,
+                    "daily_pnl": "$0.00",
+                },
+                "equity_curve": [],
+                "recent_trades": [],
+                "error": str(e),
+            }
+        )
 
 
 @app.route("/api/logs")
@@ -417,14 +767,14 @@ def api_logs() -> WerkzeugResponse:
 
 
 @socketio.on("connect")
-def handle_connect():
+def handle_connect() -> None:
     """Handle client connection."""
     emit("status_update", {"status": get_bot_status()})
     emit("symbols_update", {"symbols": list(current_symbols)})
 
 
 @socketio.on("disconnect")
-def handle_disconnect():
+def handle_disconnect() -> None:
     """Handle client disconnection."""
     pass
 
