@@ -220,6 +220,49 @@ env/
 *.hdf5
 models/
 
+# LangGraph Research Workflow Generated Files
+# ==========================================
+
+# Research reports and analysis outputs
+research_report_*.json
+research_report_*.txt
+research_report_*.csv
+
+# Workflow temporary files
+workflow_temp/
+workflow_cache/
+*.workflow
+
+# Symbol selection outputs
+symbol_selection_*.json
+symbol_analysis_*.json
+
+# LLM response logs (for debugging)
+llm_responses_*.log
+llm_debug_*.txt
+
+# Market research data
+market_research_*.json
+market_data_*.json
+
+# Trading symbol lists
+symbol_list_*.txt
+symbol_list_*.json
+
+# Workflow state files
+workflow_state_*.json
+workflow_cache_*.json
+
+# Backup files created by research workflow
+.env.backup.*
+env_backup_*
+
+# Additional workflow artifacts
+alpaca_positions_*.json
+portfolio_snapshot_*.json
+market_analysis_*.json
+symbol_validation_*.json
+
 # Performance monitoring
 prometheus_multiproc_dir/
 

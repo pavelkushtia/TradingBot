@@ -64,3 +64,7 @@ python-dotenv>=1.0.1
 # Interactive Brokers
 ib-insync>=0.9.80
 websockets==10.4
+
+# LangGraph AI Integration Dependencies
+langgraph>=0.1.0
+langchain>=0.1.0

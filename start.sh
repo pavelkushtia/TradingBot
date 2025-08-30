@@ -23,12 +23,13 @@ if [ $# -eq 0 ]; then
     echo "Usage: ./start.sh [command] [options]"
     echo ""
     echo "Available commands:"
-    echo "  run     Start live trading"
-    echo "  backtest       Run backtesting"
-    echo "  config         Show configuration"
-    echo "  test           Run tests"
-    echo "  help           Show detailed help"
-    echo "  web           Start the web dashboard"
+    echo "  run          Start live trading"
+    echo "  backtest     Run backtesting"
+    echo "  config       Show configuration"
+    echo "  test         Run tests"
+    echo "  help         Show detailed help"
+    echo "  web          Start the web dashboard"
+    echo "  research     🤖 Run AI-powered market research & symbol selection"
     echo ""
     echo "Examples:"
     echo "  ./start.sh run --strategy momentum"
@@ -37,6 +38,7 @@ if [ $# -eq 0 ]; then
     echo "  ./start.sh config"
     echo "  ./start.sh test"
     echo "  ./start.sh web"
+    echo "  ./start.sh research  # 🚀 Use LangGraph AI to find hot trading stocks"
     echo ""
     echo "For detailed help: ./start.sh help"
     exit 0
@@ -64,6 +66,61 @@ if [ "$1" == "web" ]; then
     }
     
     python dashboard/app.py
+    exit 0
+fi
+
+if [ "$1" == "research" ]; then
+    echo "🤖 Starting AI-Powered Market Research..."
+    echo "🔗 Connecting to LangGraph cluster for intelligent analysis"
+    echo ""
+    echo "🚀 Features:"
+    echo "   • Fetch current Alpaca positions (top 14 by value)"
+    echo "   • AI-powered web search for trending stocks"
+    echo "   • LLM analysis of market trends and opportunities"
+    echo "   • Intelligent symbol recommendations"
+    echo "   • Automatic trading bot configuration update"
+    echo ""
+    echo "⚡ Powered by your local LangGraph infrastructure:"
+    echo "   • Jetson Orin (fast LLM inference)"
+    echo "   • CPU node (heavy analysis)"
+    echo "   • Tools server (web search & scraping)"
+    echo "   • Embeddings server (semantic intelligence)"
+    echo ""
+    
+    # Check if research dependencies are installed
+    python -c "import aiohttp, langgraph" 2>/dev/null || {
+        echo "📦 Installing research dependencies..."
+        pip install aiohttp langgraph
+    }
+    
+    # Check if LangGraph cluster is accessible
+    echo "🔍 Checking LangGraph cluster connectivity..."
+    python -c "
+import requests
+try:
+    # Test LLM endpoint
+    r = requests.get('http://192.168.1.177:11434/api/tags', timeout=5)
+    print('✅ Jetson LLM: Connected')
+except:
+    print('❌ Jetson LLM: Not accessible at 192.168.1.177:11434')
+
+try:
+    # Test tools server
+    r = requests.get('http://192.168.1.190:8082/', timeout=5)
+    print('✅ Tools Server: Connected')
+except:
+    print('❌ Tools Server: Not accessible at 192.168.1.190:8082')
+
+try:
+    # Test embeddings server  
+    r = requests.get('http://192.168.1.81:9002/', timeout=5)
+    print('✅ Embeddings: Connected')
+except:
+    print('❌ Embeddings: Not accessible at 192.168.1.81:9002')
+    "
+    echo ""
+    
+    python update_symbols_with_research.py
     exit 0
 fi
 
